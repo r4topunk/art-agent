@@ -121,7 +121,7 @@ class GASLoop:
         for i in range(len(pieces)):
             _, counts = np.unique(pieces[i], return_counts=True)
             dominance_i = float(counts.max()) / pieces[i].size
-            is_dominant = dominance_i > 0.6
+            is_dominant = dominance_i > 0.4
 
             max_sim = 0.0
             for j in range(i):
@@ -132,7 +132,7 @@ class GASLoop:
                 # their patterns differ slightly — they look the same
                 if is_dominant:
                     _, counts_j = np.unique(pieces[j], return_counts=True)
-                    if float(counts_j.max()) / pieces[j].size > 0.6:
+                    if float(counts_j.max()) / pieces[j].size > 0.4:
                         sim = max(sim, 0.85)
                 max_sim = max(max_sim, sim)
 

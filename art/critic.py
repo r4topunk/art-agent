@@ -146,16 +146,20 @@ def structure_score(grid: np.ndarray) -> float:
     if regions:
         median_size = float(np.median(regions))
         n_regions = len(regions)
+        max_region_frac = float(max(regions)) / (size * size)
         # Emergent patterns: many small-to-medium regions = texture and visual rhythm
-        # Sweet spot: 15-100 regions, median size 2-8 pixels
+        # Sweet spot: 15-100 regions, median size 2-8 pixels.
+        # Also penalize when ANY single region dominates >30% of the grid —
+        # median_size misses this when one huge region coexists with many tiny ones.
         if n_regions < 4:
             region_quality = 0.1  # almost no regions = flat fill
         elif n_regions > 140:
             region_quality = 0.3  # isolated pixels = noise
         elif median_size < 1.5:
             region_quality = 0.2  # single pixels = pure noise
-        elif median_size > size * size * 0.35:
-            region_quality = 0.1  # one giant blob = flat
+        elif max_region_frac > 0.25:
+            # One blob covers >25% of the grid — penalise steeply
+            region_quality = max(0.1, 1.0 - 3.5 * (max_region_frac - 0.25))
         else:
             # Peak reward at median size 3-6 pixels (pattern-density sweet spot)
             target = 4.5
@@ -259,12 +263,38 @@ class ArtCritic:
         else:
             gate = 1.0
 
-        # Dominance penalty: crush score when one color covers too much
+        # Dominance penalty: crush score when one color covers too much.
+        # With 8 colors, uniform = 12.5% each; 35% is already 2.8× over-represented.
+        # Steeper curve (3.0×) ensures 50% dominant → gate 0.55, 65%+ → floor.
         _, counts = np.unique(grid, return_counts=True)
         dominance = float(counts.max()) / grid.size  # 0..1
-        if dominance > 0.5:
-            # Scales from 1.0 at 50% down to 0.1 at 100%
-            gate *= max(0.1, 1.0 - 1.8 * (dominance - 0.5))
+        if dominance > 0.35:
+            gate *= max(0.1, 1.0 - 3.0 * (dominance - 0.35))
+
+        # Large-region gate: if any contiguous same-color region covers >20%
+        # of the grid, multiply gate down.  structure_score also penalises
+        # this in its region_quality sub-component, but that gets diluted by
+        # averaging with 3 other sub-scores — this gate is multiplicative and
+        # cannot be washed out.
+        size = grid.shape[0]
+        visited = np.zeros_like(grid, dtype=bool)
+        max_region = 0
+        for ri in range(size):
+            for ci in range(size):
+                if not visited[ri, ci]:
+                    stack = [(ri, ci)]
+                    color = int(grid[ri, ci])
+                    count = 0
+                    while stack:
+                        r2, c2 = stack.pop()
+                        if 0 <= r2 < size and 0 <= c2 < size and not visited[r2, c2] and grid[r2, c2] == color:
+                            visited[r2, c2] = True
+                            count += 1
+                            stack.extend([(r2 + 1, c2), (r2 - 1, c2), (r2, c2 + 1), (r2, c2 - 1)])
+                    max_region = max(max_region, count)
+        max_region_frac = max_region / grid.size
+        if max_region_frac > 0.20:
+            gate *= max(0.1, 1.0 - 2.5 * (max_region_frac - 0.20))
 
         sym = symmetry_score(grid)
         cplx = complexity_score(grid, n_colors)
