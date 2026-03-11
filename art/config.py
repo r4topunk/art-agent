@@ -67,7 +67,7 @@ class ArtConfig:
     temp_diversity_floor: float = 0.15  # spike temp when batch diversity drops below this
 
     # Generation sampling
-    top_p: float = 0.9   # nucleus sampling threshold (1.0 = disabled)
+    top_p: float = 1.0   # nucleus sampling threshold (1.0 = disabled)
 
     # Vocab — 8 color tokens (0-7) + special tokens
     n_colors: int = 8

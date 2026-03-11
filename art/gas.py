@@ -336,15 +336,13 @@ class GASLoop:
         selected: list[np.ndarray],
         bootstrap_patterns: list[np.ndarray] | None = None,
     ) -> None:
-        # Augment selected pieces with 4 rotations to multiply training signal
-        training_patterns = self._augment_rotations(selected)
+        training_patterns = list(selected)
 
         if (
             self.generation % self.config.bootstrap_mix_interval == 0
             and bootstrap_patterns
         ):
-            ratio = self._bootstrap_ratio()
-            n_bootstrap = max(1, int(len(selected) * ratio))
+            n_bootstrap = max(1, int(len(selected) * self.config.bootstrap_mix_ratio))
             sampled = random.sample(bootstrap_patterns, min(n_bootstrap, len(bootstrap_patterns)))
             training_patterns = training_patterns + sampled
 
