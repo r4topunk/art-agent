@@ -30,18 +30,22 @@ class WallpaperWidget(Widget):
         self._generation: int = 0
         self._finetune_step: int = 0
         self._finetune_total: int = 0
-        self._all_gens: list[list[np.ndarray]] = []  # scored grids per gen, for cycling
+        self._all_pieces: list[np.ndarray] = []  # all individual scored pieces across gens
         self._cycle_index: int = 0
+        self._cycle_size: int = 3  # pieces to show at once while cycling
 
     def on_mount(self):
-        self.set_interval(2.5, self._cycle_next_gen)
+        self.set_interval(0.33, self._cycle_next_piece)
 
-    def _cycle_next_gen(self):
-        """During finetuning, rotate through all scored generations on the mural."""
-        if self._phase == "finetuning" and len(self._all_gens) > 1:
-            self._cycle_index = (self._cycle_index + 1) % len(self._all_gens)
-            self._grids = self._all_gens[self._cycle_index]
-            self.refresh()
+    def _cycle_next_piece(self):
+        """During finetuning, flash through individual pieces (groups of 3) on the mural."""
+        if self._phase != "finetuning" or not self._all_pieces:
+            return
+        n = len(self._all_pieces)
+        self._cycle_index = (self._cycle_index + self._cycle_size) % max(1, n)
+        i = self._cycle_index
+        self._grids = self._all_pieces[i:i + self._cycle_size] or self._all_pieces[:self._cycle_size]
+        self.refresh()
 
     # ------------------------------------------------------------------ events from app
 
@@ -68,10 +72,9 @@ class WallpaperWidget(Widget):
     def update_scored(self, pieces: list[np.ndarray], scores: list[dict]):
         self._grids = pieces
         self._phase = "scored"
-        # Accumulate for finetuning slideshow (deduplicate by identity)
-        if not self._all_gens or self._all_gens[-1] is not pieces:
-            self._all_gens.append(pieces)
-            self._cycle_index = len(self._all_gens) - 1
+        # Accumulate individual pieces for finetuning slideshow
+        if pieces and (not self._all_pieces or self._all_pieces[-1] is not pieces[-1]):
+            self._all_pieces.extend(pieces)
         self.refresh()
 
     def update_selected(self, indices: list[int]):
@@ -126,8 +129,6 @@ class WallpaperWidget(Widget):
             status = f" gen {self._generation}  finetuning {pct:.0f}% "
         elif self._phase == "scoring":
             status = f" gen {self._generation}  scoring... "
-        elif self._phase == "generating":
-            status = f" gen {self._generation}  generating... "
 
         # Render exactly w cols × h lines (crop partial pieces at right/bottom)
         result = Text()
