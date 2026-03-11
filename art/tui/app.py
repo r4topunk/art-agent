@@ -205,6 +205,7 @@ class ArtApp(App):
         self._latest_confidences: np.ndarray | None = None
         self._train_total_steps: int = 0
         self._human_picks: list[int] | None = None  # set by review confirm
+        self._is_finetuning: bool = False
 
     def on_mount(self):
         self.push_screen(DashboardScreen())
@@ -279,6 +280,9 @@ class ArtApp(App):
     def _on_train_step(self, step: int, loss: float, lr: float, grad_norm: float = 0.0):
         if step % 5 == 0:
             self.call_from_thread(self._u_train_step, step, loss, lr, grad_norm)
+        # Forward finetune progress to mural
+        if getattr(self, "_is_finetuning", False) and step % 5 == 0:
+            self.call_from_thread(self._mural_finetune_step, step)
 
     def _u_train_step(self, step: int, loss: float, lr: float, grad_norm: float):
         try:
@@ -310,6 +314,7 @@ class ArtApp(App):
             pass
 
     def _on_train_end(self, losses: list[float]):
+        self._is_finetuning = False
         self.call_from_thread(self._u_train_end)
 
     def _u_train_end(self):
@@ -378,6 +383,7 @@ class ArtApp(App):
         self._genwatch_call("update_scoring", done, total)
 
     def _on_finetune_start(self, n_selected: int, generation: int):
+        self._is_finetuning = True
         self.call_from_thread(self._u_finetune_start, n_selected, generation)
 
     def _u_finetune_start(self, n_selected: int, generation: int):
@@ -696,6 +702,14 @@ class ArtApp(App):
             if isinstance(self.screen, WallpaperScreen):
                 panel = self.screen.query_one("#wallpaper-widget", WallpaperWidget)
                 getattr(panel, method)(*args)
+        except Exception:
+            pass
+
+    def _mural_finetune_step(self, step: int):
+        try:
+            if isinstance(self.screen, WallpaperScreen):
+                panel = self.screen.query_one("#wallpaper-widget", WallpaperWidget)
+                panel.update_finetune(step, self._train_total_steps)
         except Exception:
             pass
 

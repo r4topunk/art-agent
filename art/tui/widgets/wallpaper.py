@@ -28,12 +28,14 @@ class WallpaperWidget(Widget):
         self._grids: list[np.ndarray] = []
         self._phase: str = "waiting"
         self._generation: int = 0
+        self._finetune_step: int = 0
+        self._finetune_total: int = 0
 
     # ------------------------------------------------------------------ events from app
 
     def update_gen_start(self, generation: int, temperature: float):
         self._generation = generation
-        self._grids = []
+        # Keep previous grids visible until new pixels arrive
         self._phase = "generating"
         self.refresh()
 
@@ -53,6 +55,13 @@ class WallpaperWidget(Widget):
 
     def update_selected(self, indices: list[int]):
         self.refresh()
+
+    def update_finetune(self, step: int, total: int):
+        self._phase = "finetuning"
+        self._finetune_step = step
+        self._finetune_total = total
+        if step % 5 == 0:
+            self.refresh()
 
     # ------------------------------------------------------------------ render
 
@@ -89,15 +98,31 @@ class WallpaperWidget(Widget):
                 rr, cc = min(pr, 16), min(pc, 16)
                 mural[r0:r0 + rr, c0:c0 + cc] = piece[:rr, :cc]
 
+        # Status overlay for the bottom row
+        status = ""
+        if self._phase == "finetuning":
+            pct = self._finetune_step / max(1, self._finetune_total) * 100
+            status = f" gen {self._generation}  finetuning {pct:.0f}% "
+        elif self._phase == "scoring":
+            status = f" gen {self._generation}  scoring... "
+        elif self._phase == "generating":
+            status = f" gen {self._generation}  generating... "
+
         # Render exactly w cols × h lines (crop partial pieces at right/bottom)
         result = Text()
         for tr in range(h):
             py0 = tr * 2
             py1 = py0 + 1
+            is_status_row = tr == h - 1 and status
+            status_start = max(0, (w - len(status)) // 2) if is_status_row else w
+            status_end = status_start + len(status) if is_status_row else w
             for tc in range(w):
-                top = int(mural[py0, tc]) if py0 < mural_ph else 0
-                bot = int(mural[py1, tc]) if py1 < mural_ph else 0
-                result.append(UPPER_HALF, style=f"{PALETTE_TERM[top]} on {PALETTE_TERM[bot]}")
+                if is_status_row and status_start <= tc < status_end:
+                    result.append(status[tc - status_start], style="bold white on #1a1a2e")
+                else:
+                    top = int(mural[py0, tc]) if py0 < mural_ph else 0
+                    bot = int(mural[py1, tc]) if py1 < mural_ph else 0
+                    result.append(UPPER_HALF, style=f"{PALETTE_TERM[top]} on {PALETTE_TERM[bot]}")
             if tr < h - 1:
                 result.append("\n")
 
