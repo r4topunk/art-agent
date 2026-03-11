@@ -92,6 +92,9 @@ class OvernightRunner:
                 self.evolution_log = json.load(f)
             print(f"Loaded evolution log with {len(self.evolution_log)} entries")
 
+        # Load archive of past selected pieces for repetition penalty
+        self._load_archive(latest_gen)
+
         # Load bootstrap patterns if they exist
         if self.config.bootstrap_dir.exists():
             bootstrap_files = sorted(self.config.bootstrap_dir.glob("pattern_*.png"))
@@ -108,6 +111,30 @@ class OvernightRunner:
                 print(f"Loaded {len(patterns)} bootstrap patterns")
 
         return True
+
+    def _load_archive(self, up_to_gen: int) -> None:
+        """Load selected pieces from past generations into GAS archive for repetition penalty."""
+        from art.tokenizer import PixelTokenizer
+        tokenizer = PixelTokenizer(self.config)
+        archive = []
+        for g in range(up_to_gen + 1):
+            gen_dir = self.config.collections_dir / f"gen_{g:03d}"
+            sel_path = gen_dir / "selections.json"
+            pieces_dir = gen_dir / "pieces"
+            if not sel_path.exists() or not pieces_dir.exists():
+                continue
+            with open(sel_path) as f:
+                selections = json.load(f)
+            for idx in selections:
+                img_path = pieces_dir / f"piece_{idx:04d}.png"
+                if img_path.exists():
+                    img = __import__("PIL").Image.open(img_path)
+                    tokens = tokenizer.encode(img)
+                    grid = tokenizer.decode_to_grid(tokens)
+                    archive.append(grid)
+        self.gas.archive = archive
+        if archive:
+            print(f"Loaded {len(archive)} archived pieces for repetition penalty")
 
     def initialize(self):
         """Generate bootstrap patterns and train model on bootstrap data."""

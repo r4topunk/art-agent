@@ -234,14 +234,21 @@ class ArtCritic:
     def score_single(self, grid: np.ndarray) -> dict:
         n_colors = self.config.n_colors
 
-        # Gate: penalize flat/sparse images
+        # Gate: penalize flat/sparse images and dominant-color images
         unique = len(np.unique(grid))
         if unique <= 1:
-            gate = 0.2  # solid fill
+            gate = 0.1  # solid fill — nearly worthless
         elif unique <= 2:
-            gate = 0.6  # near-monochrome
+            gate = 0.4  # near-monochrome
         else:
             gate = 1.0
+
+        # Dominance penalty: crush score when one color covers too much
+        _, counts = np.unique(grid, return_counts=True)
+        dominance = float(counts.max()) / grid.size  # 0..1
+        if dominance > 0.5:
+            # Scales from 1.0 at 50% down to 0.1 at 100%
+            gate *= max(0.1, 1.0 - 1.8 * (dominance - 0.5))
 
         sym = symmetry_score(grid)
         cplx = complexity_score(grid, n_colors)

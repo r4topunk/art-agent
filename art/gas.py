@@ -37,6 +37,8 @@ class GASLoop:
         self.use_vlm = use_vlm
         self.vlm_model = vlm_model
         self._diversity_low = False
+        # Archive of past selected pieces for repetition penalty
+        self.archive: list[np.ndarray] = []
 
     def get_temperature(self) -> float:
         if self._diversity_low:
@@ -103,6 +105,61 @@ class GASLoop:
 
         scores = self.critic.score_batch(pieces, on_progress=on_score_progress)
 
+        # Intra-generation penalty: punish duplicates within the same batch
+        # harder (0.7 multiplier) so the model is pushed toward variety.
+        # Also groups "dominant color" pieces together — if multiple pieces
+        # in the batch are 60%+ one color, they're treated as similar.
+        dominant_seen = 0  # count of dominant-color pieces already seen
+        for i in range(len(pieces)):
+            _, counts = np.unique(pieces[i], return_counts=True)
+            dominance_i = float(counts.max()) / pieces[i].size
+            is_dominant = dominance_i > 0.6
+
+            max_sim = 0.0
+            for j in range(i):
+                pixel_sim = 1.0 - self._hamming(pieces[i], pieces[j])
+                struct_sim = self._structural_similarity(pieces[i], pieces[j])
+                sim = max(pixel_sim, struct_sim)
+                # Boost similarity between dominant-color pieces even if
+                # their patterns differ slightly — they look the same
+                if is_dominant:
+                    _, counts_j = np.unique(pieces[j], return_counts=True)
+                    if float(counts_j.max()) / pieces[j].size > 0.6:
+                        sim = max(sim, 0.85)
+                max_sim = max(max_sim, sim)
+
+            if max_sim > 0.6:
+                penalty = (max_sim - 0.6) / 0.4  # 0..1
+                scores[i]["intra_gen_penalty"] = penalty
+                scores[i]["composite"] *= (1.0 - 0.7 * penalty)
+            else:
+                scores[i]["intra_gen_penalty"] = 0.0
+
+            if is_dominant:
+                dominant_seen += 1
+
+        # Repetition penalty: punish pieces too similar to past archived pieces
+        # Uses both pixel-level AND structural (color-agnostic) similarity
+        # so same pattern with different colors is also penalised.
+        if self.archive:
+            for i, piece in enumerate(pieces):
+                max_pixel_sim = max(
+                    1.0 - self._hamming(piece, past) for past in self.archive
+                )
+                max_struct_sim = max(
+                    self._structural_similarity(piece, past)
+                    for past in self.archive
+                )
+                # Take the worse of the two similarities
+                max_sim = max(max_pixel_sim, max_struct_sim)
+                # Penalty ramps up: 0 when similarity < 0.7, full at 1.0
+                if max_sim > 0.7:
+                    penalty = (max_sim - 0.7) / 0.3  # 0..1
+                    scores[i]["repetition_penalty"] = penalty
+                    scores[i]["composite"] *= (1.0 - 0.5 * penalty)
+                else:
+                    scores[i]["repetition_penalty"] = 0.0
+
         if self.use_vlm:
             try:
                 from art.vlm_critic import score_batch_with_vlm
@@ -146,6 +203,26 @@ class GASLoop:
     def _hamming(self, a: np.ndarray, b: np.ndarray) -> float:
         return float(np.sum(a != b)) / a.size
 
+    @staticmethod
+    def _canonicalize(grid: np.ndarray) -> np.ndarray:
+        """Remap colors by order of first appearance so structure is color-agnostic."""
+        flat = grid.ravel()
+        mapping = {}
+        next_id = 0
+        canon = np.empty_like(flat)
+        for i, v in enumerate(flat):
+            if v not in mapping:
+                mapping[v] = next_id
+                next_id += 1
+            canon[i] = mapping[v]
+        return canon.reshape(grid.shape)
+
+    def _structural_similarity(self, a: np.ndarray, b: np.ndarray) -> float:
+        """Similarity ignoring color identity — same pattern different colors = 1.0."""
+        ca = self._canonicalize(a)
+        cb = self._canonicalize(b)
+        return 1.0 - float(np.sum(ca != cb)) / ca.size
+
     def select(
         self,
         pieces: list[np.ndarray],
@@ -167,8 +244,12 @@ class GASLoop:
             for i in range(len(pieces)):
                 if i in selected_indices:
                     continue
-                # Min distance to any already-selected piece
-                min_dist = min(self._hamming(pieces[i], pieces[j]) for j in selected_indices)
+                # Min distance to any already-selected piece (pixel + structural)
+                min_dist = min(
+                    min(self._hamming(pieces[i], pieces[j]),
+                        1.0 - self._structural_similarity(pieces[i], pieces[j]))
+                    for j in selected_indices
+                )
                 # Blend: 50% composite score + 50% diversity from selected set
                 blended = 0.5 * composites[i] + 0.5 * min_dist
                 if blended > best_score:
@@ -217,8 +298,15 @@ class GASLoop:
         pieces_dir = gen_dir / "pieces"
         pieces_dir.mkdir(parents=True, exist_ok=True)
 
-        for idx, piece in enumerate(pieces):
-            # Convert color indices to RGB
+        # Only save the selected pieces (not all generated)
+        selected_scores = [scores[i] for i in selections]
+
+        # Find the best piece among selections (highest composite)
+        best_local_idx = int(np.argmax([s["composite"] for s in selected_scores]))
+        best_global_idx = selections[best_local_idx]
+
+        for rank, idx in enumerate(selections):
+            piece = pieces[idx]
             h, w = piece.shape
             rgb = np.zeros((h, w, 3), dtype=np.uint8)
             for ci in range(self.config.n_colors):
@@ -226,14 +314,24 @@ class GASLoop:
                 rgb[mask] = PALETTE_16[ci]
             img = __import__("PIL").Image.fromarray(rgb, mode="RGB")
             img.save(pieces_dir / f"piece_{idx:04d}.png")
-            if self.event_bus and (idx + 1) % 8 == 0:
-                self.event_bus.emit("saving_piece", done=idx + 1, total=len(pieces))
 
+            # Also save the generation's best piece upscaled to 1024x1024
+            if idx == best_global_idx:
+                img_upscaled = img.resize((1024, 1024), __import__("PIL").Image.NEAREST)
+                img_upscaled.save(gen_dir / "best.png")
+
+        if self.event_bus:
+            self.event_bus.emit("saving_piece", done=len(selections), total=len(selections))
+
+        # Save only scores for selected pieces, plus metadata
         with open(gen_dir / "scores.json", "w") as f:
-            json.dump(scores, f, indent=2)
+            json.dump(selected_scores, f, indent=2)
 
         with open(gen_dir / "selections.json", "w") as f:
             json.dump(selections, f, indent=2)
+
+        with open(gen_dir / "best.json", "w") as f:
+            json.dump({"best_index": best_global_idx, "score": selected_scores[best_local_idx]}, f, indent=2)
 
         checkpoint_path = gen_dir / "checkpoint.pt"
         self.trainer.save_checkpoint(
@@ -284,9 +382,17 @@ class GASLoop:
             self.event_bus.emit("saving_start", generation=self.generation)
         self.save_generation(gen_dir, pieces, scores, selection_indices)
         if self.event_bus:
-            self.event_bus.emit("saving_complete", generation=self.generation, n_pieces=len(pieces))
+            self.event_bus.emit("saving_complete", generation=self.generation, n_pieces=len(selected))
+
+        # Add selected pieces to archive for future repetition penalty
+        self.archive.extend(selected)
 
         composites = [s["composite"] for s in scores]
+        # Find the best piece index among selections
+        sel_composites = [scores[i]["composite"] for i in selection_indices]
+        best_sel_local = int(np.argmax(sel_composites))
+        best_idx = selection_indices[best_sel_local]
+
         summary = {
             "generation": self.generation,
             "temperature": self.get_temperature(),
@@ -295,6 +401,8 @@ class GASLoop:
             "min_score": float(np.min(composites)),
             "n_pieces": len(pieces),
             "n_selected": len(selected),
+            "best_index": best_idx,
+            "best_score": float(scores[best_idx]["composite"]),
         }
 
         if self.event_bus:
