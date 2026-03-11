@@ -161,8 +161,8 @@ class GalleryGrid(Widget):
 
     @property
     def _fit_cols(self) -> int:
-        """How many framed 16px items fit side by side."""
-        return max(1, self._cw // 19)  # 16px art + 2 frame + 1 spacing
+        """How many 16px items fit side by side."""
+        return max(1, (self._cw + 2) // 18)  # 16px art + 2 spacing
 
     def update_pieces(self, pieces: list[np.ndarray], scores: list[dict]):
         self._is_training = False

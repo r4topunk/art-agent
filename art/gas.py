@@ -53,7 +53,7 @@ class GASLoop:
         self.model.eval()
 
         # Stream live progress to TUI: decode a subset every 2 rows (32 pixels)
-        display_n = min(8, n)
+        display_n = n
         grid_size = self.config.grid_size
         total_pixels = grid_size * grid_size
         bus = self.event_bus
