@@ -62,16 +62,18 @@ class Trainer:
 
         scheduler = torch.optim.lr_scheduler.LambdaLR(self.optimizer, lr_lambda)
 
+        effective_bs = min(self.config.batch_size, len(dataset))
         dataloader = DataLoader(
             dataset,
-            batch_size=self.config.batch_size,
+            batch_size=effective_bs,
             shuffle=True,
-            drop_last=True,
+            drop_last=len(dataset) > effective_bs,
         )
 
         self.model.train()
         losses: list[float] = []
         data_iter = iter(dataloader)
+        use_amp = self.device.type == "mps"
 
         if self.event_bus:
             self.event_bus.emit("train_start", total_steps=steps, phase="train")
@@ -89,23 +91,22 @@ class Trainer:
             inputs = tokens[:, :-1]
             targets = tokens[:, 1:]
 
-            logits = self.model(inputs)
-            # logits: (B, T, vocab_size) -> (B*T, vocab_size)
-            loss = self.loss_fn(
-                logits.reshape(-1, logits.size(-1)),
-                targets.reshape(-1),
-            )
+            with torch.autocast(self.device.type, enabled=use_amp):
+                logits = self.model(inputs)
+                loss = self.loss_fn(
+                    logits.reshape(-1, logits.size(-1)),
+                    targets.reshape(-1),
+                )
 
             if self.event_bus and step % 50 == 0:
                 with torch.no_grad():
                     per_token = F.cross_entropy(
-                        logits.reshape(-1, logits.size(-1)),
+                        logits.float().reshape(-1, logits.size(-1)),
                         targets.reshape(-1),
                         ignore_index=self.config.PAD,
                         reduction='none',
                     )
-                    # Average across batch, reshape to seq positions
-                    per_pos = per_token.view(targets.shape).mean(dim=0)  # (seq_len-1,)
+                    per_pos = per_token.view(targets.shape).mean(dim=0)
                     self.event_bus.emit("token_difficulty", difficulties=per_pos.cpu().tolist())
 
             self.optimizer.zero_grad()

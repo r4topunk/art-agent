@@ -7,23 +7,23 @@ class ArtConfig:
     # Model architecture
     d_model: int = 256
     n_heads: int = 8
-    n_layers: int = 8
+    n_layers: int = 6
     d_ff: int = 1024
 
     # Grid
     grid_size: int = 16
 
     # Training
-    batch_size: int = 128
+    batch_size: int = 64
     lr: float = 3e-4
     weight_decay: float = 0.01
-    warmup_steps: int = 100
-    train_steps: int = 500
+    warmup_steps: int = 50
+    train_steps: int = 300
 
     # GAS
     images_per_gen: int = 32
     select_top: int = 12
-    finetune_steps: int = 100
+    finetune_steps: int = 80
     finetune_lr: float = 1e-4
 
     # GAS extras
