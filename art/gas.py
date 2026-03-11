@@ -52,7 +52,7 @@ class GASLoop:
         temperature = self.get_temperature()
         self.model.eval()
 
-        # Stream live progress to TUI: decode a subset every 2 rows (32 pixels)
+        # Stream live progress to TUI: decode every 4 pixels for smooth animation
         display_n = n
         grid_size = self.config.grid_size
         total_pixels = grid_size * grid_size
@@ -60,7 +60,7 @@ class GASLoop:
 
         def on_token(t: int, seq, conf):
             pixel = t - 1  # token 1 = pixel 0
-            if pixel % 16 == 0 and pixel >= 0 and bus:
+            if pixel >= 0 and pixel % 4 == 0 and bus:
                 partial_grids = []
                 for i in range(display_n):
                     grid = self.tokenizer.decode_to_grid(seq[i].tolist())
