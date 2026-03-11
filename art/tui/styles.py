@@ -17,11 +17,11 @@ Screen {
 }
 
 #top-row {
-    height: 1fr;
+    height: 3fr;
 }
 
 #bottom-row {
-    height: 1fr;
+    height: 2fr;
 }
 
 /* Top row widgets */
@@ -35,7 +35,7 @@ Screen {
 }
 
 #gallery-panel {
-    width: 2fr;
+    width: 3fr;
     min-width: 44;
     height: 100%;
     border: solid #3a3a5c;
@@ -63,7 +63,7 @@ Screen {
 }
 
 #birth {
-    width: 2fr;
+    width: 3fr;
     min-width: 44;
     height: 100%;
     border: solid #3a3a5c;
@@ -77,6 +77,15 @@ Screen {
     height: 100%;
     border: solid #3a3a5c;
     padding: 0 1;
+    overflow: hidden;
+}
+
+/* System log — compact strip */
+#system-log {
+    width: 100%;
+    height: 8;
+    border: solid #3a3a5c;
+    padding: 0;
     overflow: hidden;
 }
 

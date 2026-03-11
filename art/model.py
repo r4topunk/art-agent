@@ -104,6 +104,23 @@ class PixelGPT(nn.Module):
         h = self.ln_f(h)
         return self.head(h)
 
+    @torch.no_grad()
+    def forward_with_activations(self, x: Tensor) -> tuple[Tensor, list[Tensor]]:
+        """Forward pass that also returns intermediate layer activations.
+
+        Each activation has shape (B, T, d_model) — the output of each
+        transformer block before residual connections sum up.
+        """
+        B, T = x.shape
+        positions = torch.arange(T, device=x.device).unsqueeze(0)
+        h = self.tok_emb(x) + self.pos_emb(positions)
+        layer_activations = []
+        for block in self.blocks:
+            h = block(h)
+            layer_activations.append(h.detach())
+        h = self.ln_f(h)
+        return self.head(h), layer_activations
+
     def _init_kv_cache(self) -> list[dict | None]:
         return [None] * len(self.blocks)
 

@@ -3,30 +3,23 @@ import numpy as np
 from rich.text import Text
 from textual.widget import Widget
 
+from art.config import PALETTE_TERM
+
 UPPER_HALF = "▀"
-LOWER_HALF = "▄"
-FULL_BLOCK = "█"
-EMPTY = " "
 SPARK = "▁▂▃▄▅▆▇█"
 
 
 def _render_row(grid: np.ndarray) -> Text:
-    """Render a 16x16 grid as a single compact row: 8 chars tall squeezed into 2-line representation using half blocks."""
-    # Ultra-compact: just show middle 2 rows as a single line of half-blocks
+    """Render middle 2 rows of grid as a single line using half-blocks with color."""
     size = grid.shape[0]
     mid = size // 2
     line = Text()
     for x in range(size):
-        top = grid[mid - 1, x]
-        bot = grid[mid, x]
-        if top and bot:
-            line.append(FULL_BLOCK, style="bright_green")
-        elif top:
-            line.append(UPPER_HALF, style="bright_green")
-        elif bot:
-            line.append(LOWER_HALF, style="bright_green")
-        else:
-            line.append(" ")
+        top = int(grid[mid - 1, x])
+        bot = int(grid[mid, x])
+        fg = PALETTE_TERM[top]
+        bg = PALETTE_TERM[bot]
+        line.append(UPPER_HALF, style=f"{fg} on {bg}")
     return line
 
 
@@ -39,16 +32,21 @@ class TimelineWidget(Widget):
     }
     """
 
-    def __init__(self, max_visible: int = 20, **kwargs):
+    def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self._entries: list[tuple[int, np.ndarray, float]] = []  # (gen, best_piece, best_score)
-        self.max_visible = max_visible
+        self._entries: list[tuple[int, np.ndarray, float, float | None]] = []
 
-    def add_generation(self, generation: int, best_piece: np.ndarray, best_score: float):
-        self._entries.append((generation, best_piece, best_score))
+    @property
+    def _max_visible(self) -> int:
+        """Fit as many entries as the widget height allows."""
+        return max(3, self.size.height - 4)  # border(2) + title(1) + footer(1)
+
+    def add_generation(self, generation: int, best_piece: np.ndarray, best_score: float, vlm_score: float | None = None):
+        self._entries.append((generation, best_piece, best_score, vlm_score))
         self.refresh()
 
     def render(self) -> Text:
+        cw = max(16, self.size.width - 4)
         result = Text()
         result.append("⏳ TIMELINE\n", style="bold yellow")
 
@@ -56,39 +54,36 @@ class TimelineWidget(Widget):
             result.append("  No generations yet\n", style="dim")
             return result
 
-        # Show last max_visible entries
-        visible = self._entries[-self.max_visible:]
+        max_vis = self._max_visible
+        visible = self._entries[-max_vis:]
 
-        # Score sparkline on the side
-        all_scores = [s for _, _, s in self._entries]
+        all_scores = [s for _, _, s, _ in self._entries]
         min_s = min(all_scores) if all_scores else 0
         max_s = max(all_scores) if all_scores else 1
         range_s = max_s - min_s if max_s > min_s else 1.0
 
-        for gen, piece, score in visible:
-            # Score color
+        # Bar width fills remaining space after: "  G999 " (7) + piece(16) + " 0.65 " (6) + vlm(5) + star(2)
+        bar_w = max(3, cw - 34)
+
+        for gen, piece, score, vlm_score in visible:
             score_color = "green" if score >= 0.6 else "yellow" if score >= 0.4 else "red"
 
-            # Generation label
             result.append(f"  G{gen:<3d} ", style="dim cyan")
-
-            # Compact piece render (middle slice)
             result.append(_render_row(piece))
-
-            # Score + sparkbar
             result.append(f" {score:.2f} ", style=score_color)
 
-            # Mini bar
-            bar_len = int((score - min_s) / range_s * 8) if range_s > 0 else 4
+            bar_len = int((score - min_s) / range_s * bar_w) if range_s > 0 else bar_w // 2
             result.append("█" * bar_len, style=score_color)
 
-            # Mark best ever
+            if vlm_score is not None:
+                result.append(f" v{vlm_score:.1f}", style="bright_cyan")
+
             if score == max_s and len(self._entries) > 1:
                 result.append(" ★", style="bright_yellow")
 
             result.append("\n")
 
-        if len(self._entries) > self.max_visible:
-            result.append(f"  ... {len(self._entries) - self.max_visible} earlier generations\n", style="dim")
+        if len(self._entries) > max_vis:
+            result.append(f"  ... {len(self._entries) - max_vis} earlier\n", style="dim")
 
         return result

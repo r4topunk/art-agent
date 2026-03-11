@@ -19,6 +19,7 @@ class HeaderWidget(Widget):
     total_generations = reactive(0)
     temperature = reactive(1.0)
     phase = reactive("idle")
+    vlm_active = reactive(False)
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -43,4 +44,7 @@ class HeaderWidget(Widget):
         result.append(f"⏱ {elapsed_str}", style="bold green")
         result.append("  │ ", style="dim")
         result.append(f"{self.phase}", style="bold white")
+        if self.vlm_active:
+            result.append("  │ ", style="dim")
+            result.append("VLM", style="bold bright_cyan")
         return result

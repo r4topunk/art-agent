@@ -11,7 +11,7 @@ def save_image(image: PIL.Image.Image, path: Path) -> None:
 
 def load_image(path: Path) -> PIL.Image.Image:
     img = PIL.Image.open(path)
-    return img.convert("L")
+    return img.convert("RGB")
 
 
 def create_grid(images: list[PIL.Image.Image], cols: int = 8, cell_size: int = 64) -> PIL.Image.Image:
@@ -22,13 +22,13 @@ def create_grid(images: list[PIL.Image.Image], cols: int = 8, cell_size: int = 6
     grid_width = cols * (cell_size + padding) + padding
     grid_height = rows * (cell_size + padding) + padding
 
-    grid = PIL.Image.new("L", (grid_width, grid_height), color=255)
+    grid = PIL.Image.new("RGB", (grid_width, grid_height), color=(0, 0, 0))
 
     for idx, img in enumerate(images):
         row = idx // cols
         col = idx % cols
 
-        scaled = img.resize((cell_size, cell_size), PIL.Image.Resampling.LANCZOS)
+        scaled = img.convert("RGB").resize((cell_size, cell_size), PIL.Image.Resampling.NEAREST)
 
         x = col * (cell_size + padding) + padding
         y = row * (cell_size + padding) + padding

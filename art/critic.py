@@ -3,96 +3,102 @@ from art.config import ArtConfig
 
 
 def symmetry_score(grid: np.ndarray) -> float:
+    """Measure symmetry across axes and rotations. Works with any discrete values."""
     g = grid.astype(np.int16)
-    h_sym = 1 - np.mean(np.abs(g - np.fliplr(g)))
-    v_sym = 1 - np.mean(np.abs(g - np.flipud(g)))
-    r180_sym = 1 - np.mean(np.abs(g - np.rot90(g, 2)))
-    r90_sym = 1 - np.mean(np.abs(g - np.rot90(g)))
+    total = g.size
+    h_sym = 1 - np.sum(g != np.fliplr(g)) / total
+    v_sym = 1 - np.sum(g != np.flipud(g)) / total
+    r180_sym = 1 - np.sum(g != np.rot90(g, 2)) / total
+    r90_sym = 1 - np.sum(g != np.rot90(g)) / total
     return float(np.mean([h_sym, v_sym, r180_sym, r90_sym]))
 
 
-def complexity_score(grid: np.ndarray) -> float:
-    g = grid.astype(np.int16)
-    size = g.shape[0]
-    density = float(np.mean(g))
+def complexity_score(grid: np.ndarray, n_colors: int = 16) -> float:
+    """Measure visual complexity: color diversity, edges, entropy."""
+    size = grid.shape[0]
 
-    # Hard penalty for too-empty or too-full images
-    # Peak at 30-70% density, drops to 0 below 15% or above 85%
-    if density < 0.15 or density > 0.85:
-        density_score = 0.0
-    elif density < 0.3:
-        density_score = (density - 0.15) / 0.15  # ramp 0→1
-    elif density > 0.7:
-        density_score = (0.85 - density) / 0.15  # ramp 1→0
+    # Color usage: how many distinct colors are used (reward 3-10, penalize 1 or all 16)
+    unique = len(np.unique(grid))
+    if unique <= 1:
+        color_score = 0.0
+    elif unique <= 2:
+        color_score = 0.3
+    elif unique <= 10:
+        color_score = min(1.0, unique / 6.0)
     else:
-        density_score = 1.0
+        color_score = max(0.5, 1.0 - (unique - 10) / 10.0)
 
-    edge_count = (
-        np.sum(np.abs(np.diff(g, axis=0))) +
-        np.sum(np.abs(np.diff(g, axis=1)))
-    )
+    # Edge count: transitions between different colors
+    h_edges = np.sum(grid[:, :-1] != grid[:, 1:])
+    v_edges = np.sum(grid[:-1, :] != grid[1:, :])
     max_edges = 2 * size * (size - 1)
-    edge_score = float(edge_count / max_edges)
+    edge_score = float((h_edges + v_edges) / max_edges)
 
+    # Block entropy: Shannon entropy of color distribution in 4x4 blocks
     block_size = max(1, size // 4)
     n_blocks = size // block_size
     entropy_vals = []
     for i in range(n_blocks):
         for j in range(n_blocks):
-            block = grid[block_size*i:block_size*(i+1), block_size*j:block_size*(j+1)]
-            p = float(np.mean(block))
-            if p > 0 and p < 1:
-                h = -p * np.log2(p) - (1 - p) * np.log2(1 - p)
-            else:
-                h = 0.0
-            entropy_vals.append(h)
-    entropy_score = float(np.mean(entropy_vals))
-    entropy_score = min(entropy_score, 1.0)
+            block = grid[block_size * i:block_size * (i + 1),
+                         block_size * j:block_size * (j + 1)]
+            # Count color frequencies
+            counts = np.bincount(block.flatten(), minlength=n_colors)
+            probs = counts / counts.sum()
+            probs = probs[probs > 0]
+            h = -np.sum(probs * np.log2(probs))
+            # Normalize by max entropy (log2(n_colors) ≈ 4 for 16 colors)
+            max_h = np.log2(n_colors)
+            entropy_vals.append(h / max_h if max_h > 0 else 0)
+    entropy_score = float(np.mean(entropy_vals)) if entropy_vals else 0.0
 
-    return float(np.mean([density_score, edge_score, entropy_score]))
+    return float(np.mean([color_score, edge_score, entropy_score]))
 
 
 def structure_score(grid: np.ndarray) -> float:
-    """Reward structured patterns: lines, repeating motifs, coherent shapes.
-    Penalize random noise and empty space equally."""
+    """Reward structured patterns: lines, repeating motifs, coherent shapes."""
     size = grid.shape[0]
-    g = grid.astype(np.int16)
 
-    # Row and column coherence: how many rows/cols have a consistent pattern
-    row_densities = np.mean(grid, axis=1)
-    col_densities = np.mean(grid, axis=0)
-    # Reward rows that are not all-same but have structure (not random)
+    # Row and column coherence via autocorrelation
     row_autocorr = 0.0
     col_autocorr = 0.0
-    for axis_vals in [row_densities, col_densities]:
-        if len(axis_vals) > 1:
-            mean_v = np.mean(axis_vals)
-            centered = axis_vals - mean_v
-            var = np.sum(centered ** 2)
-            if var > 0:
-                # Lag-1 autocorrelation: adjacent rows/cols should be related
-                autocorr = np.sum(centered[:-1] * centered[1:]) / var
-                if axis_vals is row_densities:
-                    row_autocorr = float(np.clip(autocorr, 0, 1))
-                else:
-                    col_autocorr = float(np.clip(autocorr, 0, 1))
+    for axis in [0, 1]:
+        # For each row/col, compute fraction of adjacent same-color pixels
+        if axis == 0:
+            same = np.mean(grid[:, :-1] == grid[:, 1:])
+        else:
+            same = np.mean(grid[:-1, :] == grid[1:, :])
+        # Sweet spot: too low = noise, too high = flat. Reward 0.3-0.7
+        coherence = float(same)
+        if coherence < 0.2 or coherence > 0.9:
+            val = 0.2
+        elif coherence < 0.4:
+            val = (coherence - 0.2) / 0.2
+        elif coherence > 0.7:
+            val = (0.9 - coherence) / 0.2
+        else:
+            val = 1.0
+        if axis == 0:
+            row_autocorr = val
+        else:
+            col_autocorr = val
 
-    # 2x2 block variety: count distinct 2x2 patterns (rewards structure over noise)
+    # 2x2 block variety: count distinct 2x2 color patterns
     blocks_2x2 = set()
     for r in range(size - 1):
         for c in range(size - 1):
-            block = (grid[r, c], grid[r, c+1], grid[r+1, c], grid[r+1, c+1])
+            block = (grid[r, c], grid[r, c + 1], grid[r + 1, c], grid[r + 1, c + 1])
             blocks_2x2.add(block)
-    # Too few patterns = boring, too many = noisy. Sweet spot: 6-12 out of 16 possible
     n_patterns = len(blocks_2x2)
-    if n_patterns <= 3:
-        pattern_score = n_patterns / 6.0
-    elif n_patterns <= 12:
+    # With 16 colors, more distinct patterns expected. Sweet spot: 20-100
+    if n_patterns <= 5:
+        pattern_score = n_patterns / 10.0
+    elif n_patterns <= 100:
         pattern_score = 1.0
     else:
-        pattern_score = max(0, 1 - (n_patterns - 12) / 4)
+        pattern_score = max(0.3, 1 - (n_patterns - 100) / 200)
 
-    # Contiguous region sizes: reward medium-sized regions (not dust, not blobs)
+    # Contiguous region analysis (flood fill by color)
     visited = np.zeros_like(grid, dtype=bool)
     regions = []
 
@@ -107,7 +113,7 @@ def structure_score(grid: np.ndarray) -> float:
                 continue
             visited[r2, c2] = True
             count += 1
-            stack.extend([(r2+1, c2), (r2-1, c2), (r2, c2+1), (r2, c2-1)])
+            stack.extend([(r2 + 1, c2), (r2 - 1, c2), (r2, c2 + 1), (r2, c2 - 1)])
         return count
 
     for i in range(size):
@@ -116,32 +122,18 @@ def structure_score(grid: np.ndarray) -> float:
                 region_size = flood_fill(i, j, grid[i, j])
                 regions.append(region_size)
 
-    # Reward having multiple medium-sized regions (3-40 pixels each)
-    white_regions = []
-    visited_w = np.zeros_like(grid, dtype=bool)
-    for i in range(size):
-        for j in range(size):
-            if grid[i, j] == 1 and not visited_w[i, j]:
-                count = 0
-                stack = [(i, j)]
-                while stack:
-                    r2, c2 = stack.pop()
-                    if r2 < 0 or r2 >= size or c2 < 0 or c2 >= size:
-                        continue
-                    if visited_w[r2, c2] or grid[r2, c2] != 1:
-                        continue
-                    visited_w[r2, c2] = True
-                    count += 1
-                    stack.extend([(r2+1, c2), (r2-1, c2), (r2, c2+1), (r2, c2-1)])
-                white_regions.append(count)
-
-    if white_regions:
-        # Penalize dust (many tiny regions) and blobs (one huge region)
-        median_size = float(np.median(white_regions))
-        if median_size < 2:
-            region_quality = 0.2  # too dusty
-        elif median_size > size * size * 0.4:
-            region_quality = 0.3  # one big blob
+    if regions:
+        median_size = float(np.median(regions))
+        n_regions = len(regions)
+        # Sweet spot: 5-30 regions with median size 4-20
+        if n_regions < 3:
+            region_quality = 0.2
+        elif n_regions > 80:
+            region_quality = 0.2
+        elif median_size < 2:
+            region_quality = 0.2  # too fragmented
+        elif median_size > size * size * 0.3:
+            region_quality = 0.3  # one huge blob
         else:
             region_quality = min(1.0, median_size / 8.0)
     else:
@@ -151,58 +143,49 @@ def structure_score(grid: np.ndarray) -> float:
 
 
 def aesthetics_score(grid: np.ndarray) -> float:
+    """Evaluate aesthetic qualities: balance, framing, color harmony."""
     size = grid.shape[0]
-    h_mid, w_mid = size // 2, size // 2
-    q1 = np.mean(grid[:h_mid, :w_mid])
-    q2 = np.mean(grid[:h_mid, w_mid:])
-    q3 = np.mean(grid[h_mid:, :w_mid])
-    q4 = np.mean(grid[h_mid:, w_mid:])
-    balance_score = 1 - np.std([q1, q2, q3, q4]) * 4
-    balance_score = float(np.clip(balance_score, 0, 1))
 
-    # Border framing: reward a clear border that frames content inside
+    # Quadrant balance: do all 4 quadrants have similar color distributions?
+    h_mid, w_mid = size // 2, size // 2
+    quadrants = [
+        grid[:h_mid, :w_mid], grid[:h_mid, w_mid:],
+        grid[h_mid:, :w_mid], grid[h_mid:, w_mid:],
+    ]
+    # Compare color frequency vectors across quadrants
+    freq_vecs = []
+    for q in quadrants:
+        counts = np.bincount(q.flatten(), minlength=16).astype(float)
+        counts /= counts.sum() + 1e-8
+        freq_vecs.append(counts)
+    # Balance = low variance of frequency vectors
+    freq_arr = np.array(freq_vecs)
+    balance = 1.0 - float(np.mean(np.std(freq_arr, axis=0)))
+    balance_score = float(np.clip(balance, 0, 1))
+
+    # Border framing: contrast between border and interior
     border = np.concatenate([
         grid[0, :], grid[-1, :],
         grid[1:-1, 0], grid[1:-1, -1]
     ])
-    interior = grid[1:-1, 1:-1]
-    border_density = float(np.mean(border))
-    interior_density = float(np.mean(interior))
-    # Reward contrast between border and interior (either way)
-    framing = abs(border_density - interior_density)
-    framing_score = float(np.clip(framing * 2, 0, 1))
+    interior = grid[1:-1, 1:-1].flatten()
+    # Compare dominant colors
+    border_dom = np.argmax(np.bincount(border, minlength=16))
+    interior_dom = np.argmax(np.bincount(interior, minlength=16))
+    framing_score = 1.0 if border_dom != interior_dom else 0.3
 
-    # Connected components: reward 2-8 components (penalize dust and monoliths)
-    visited = np.zeros_like(grid, dtype=bool)
-
-    def flood_fill(r: int, c: int) -> None:
-        stack = [(r, c)]
-        while stack:
-            r, c = stack.pop()
-            if r < 0 or r >= size or c < 0 or c >= size or visited[r, c]:
-                continue
-            if grid[r, c] == 0:
-                continue
-            visited[r, c] = True
-            stack.extend([(r+1, c), (r-1, c), (r, c+1), (r, c-1)])
-
-    n_components = 0
-    for i in range(size):
-        for j in range(size):
-            if grid[i, j] == 1 and not visited[i, j]:
-                flood_fill(i, j)
-                n_components += 1
-
-    # Sweet spot: 2-8 components
-    if n_components == 0:
-        connected_score = 0.0
-    elif n_components <= 8:
-        connected_score = min(1.0, n_components / 3.0)
+    # Color harmony: reward palettes with some but not too many colors
+    unique = len(np.unique(grid))
+    if unique <= 1:
+        harmony = 0.0
+    elif unique <= 5:
+        harmony = 1.0  # limited palette = harmonious
+    elif unique <= 10:
+        harmony = 0.7
     else:
-        connected_score = max(0, 1 - (n_components - 8) / 12)
-    connected_score = float(np.clip(connected_score, 0, 1))
+        harmony = 0.4  # too many colors = chaotic
 
-    return float(np.mean([balance_score, framing_score, connected_score]))
+    return float(np.mean([balance_score, framing_score, harmony]))
 
 
 def diversity_bonus(grids: list[np.ndarray]) -> float:
@@ -223,9 +206,7 @@ def diversity_bonus(grids: list[np.ndarray]) -> float:
         if sampled_count >= pairs_to_sample:
             break
 
-    if not distances:
-        return 0.0
-    return float(np.mean(distances))
+    return float(np.mean(distances)) if distances else 0.0
 
 
 class ArtCritic:
@@ -247,18 +228,16 @@ class ArtCritic:
             self.weights = weights
 
     def score_single(self, grid: np.ndarray) -> dict:
-        density = float(np.mean(grid))
+        n_colors = self.config.n_colors
+
+        # Gate: penalize images that use only 1 color (flat fill)
+        unique = len(np.unique(grid))
+        gate = 0.3 if unique <= 1 else 1.0
 
         sym = symmetry_score(grid)
-        cplx = complexity_score(grid)
+        cplx = complexity_score(grid, n_colors)
         struct = structure_score(grid)
         aes = aesthetics_score(grid)
-
-        # Gate: images with <15% or >85% density get hard-capped
-        if density < 0.15 or density > 0.85:
-            gate = 0.3  # can't score above 0.3 if nearly empty/full
-        else:
-            gate = 1.0
 
         composite = (
             self.weights['symmetry'] * sym +
@@ -276,11 +255,11 @@ class ArtCritic:
             'composite': composite,
         }
 
-    def score_batch(self, grids: list[np.ndarray]) -> list[dict]:
+    def score_batch(self, grids: list[np.ndarray], on_progress=None) -> list[dict]:
         div_bonus = diversity_bonus(grids)
 
         scores = []
-        for grid in grids:
+        for i, grid in enumerate(grids):
             score_dict = self.score_single(grid)
             score_dict['diversity'] = div_bonus
             score_dict['composite'] = (
@@ -288,17 +267,13 @@ class ArtCritic:
                 self.weights['diversity'] * div_bonus
             )
             scores.append(score_dict)
+            if on_progress and (i + 1) % 8 == 0:
+                on_progress(i + 1, len(grids), score_dict)
 
         return scores
 
-    def rank(
-        self,
-        grids: list[np.ndarray],
-    ) -> list[tuple[int, dict]]:
+    def rank(self, grids: list[np.ndarray]) -> list[tuple[int, dict]]:
         scores = self.score_batch(grids)
-        ranked = [
-            (i, scores[i])
-            for i in range(len(grids))
-        ]
+        ranked = [(i, scores[i]) for i in range(len(grids))]
         ranked.sort(key=lambda x: x[1]['composite'], reverse=True)
         return ranked

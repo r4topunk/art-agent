@@ -4,44 +4,41 @@ import numpy as np
 from rich.text import Text
 from textual.widget import Widget
 from textual.reactive import reactive
-from textual.containers import Horizontal, Vertical
-from textual.widgets import Static
+
+from art.config import PALETTE_TERM
 
 UPPER_HALF = "▀"
-LOWER_HALF = "▄"
 FULL_BLOCK = "█"
 EMPTY = " "
 BAR_FULL = "█"
 BAR_EMPTY = "░"
 
 
-def _render_small(grid: np.ndarray) -> list[str]:
+def _render_small(grid: np.ndarray) -> list[Text]:
+    """Render grid using half-blocks with 16-color palette."""
     rows, cols = grid.shape
     lines = []
     for y in range(0, rows, 2):
-        line = ""
+        line = Text()
         for x in range(cols):
-            top = grid[y, x] if y < rows else 0
-            bot = grid[y + 1, x] if y + 1 < rows else 0
-            if top and bot:
-                line += FULL_BLOCK
-            elif top and not bot:
-                line += UPPER_HALF
-            elif not top and bot:
-                line += LOWER_HALF
-            else:
-                line += EMPTY
+            top = int(grid[y, x]) if y < rows else 0
+            bot = int(grid[y + 1, x]) if y + 1 < rows else 0
+            fg = PALETTE_TERM[top]
+            bg = PALETTE_TERM[bot]
+            line.append(UPPER_HALF, style=f"{fg} on {bg}")
         lines.append(line)
     return lines
 
 
-def _render_large(grid: np.ndarray) -> list[str]:
+def _render_large(grid: np.ndarray) -> list[Text]:
+    """Render grid at 2x scale with color."""
     rows, cols = grid.shape
     lines = []
     for y in range(rows):
-        line = ""
+        line = Text()
         for x in range(cols):
-            line += (FULL_BLOCK * 2) if grid[y, x] else (EMPTY * 2)
+            color = PALETTE_TERM[int(grid[y, x])]
+            line.append(FULL_BLOCK * 2, style=color)
         lines.append(line)
     return lines
 
@@ -67,11 +64,10 @@ class ReviewGrid(Widget):
     def __init__(self, cols: int = 8, **kwargs):
         super().__init__(**kwargs)
         self.cols = cols
-        self._pieces: list[tuple[np.ndarray, int, dict]] = []  # (grid, orig_idx, scores)
-        self._favorites: set[int] = set()  # set of original indices
+        self._pieces: list[tuple[np.ndarray, int, dict]] = []
+        self._favorites: set[int] = set()
 
     def set_pieces(self, pieces: list[np.ndarray], scores: list[dict]):
-        """Load pieces sorted by score."""
         indexed = sorted(
             enumerate(scores),
             key=lambda x: x[1].get("composite", 0),
@@ -116,7 +112,6 @@ class ReviewGrid(Widget):
         for row_start in range(0, len(self._pieces), self.cols):
             row = self._pieces[row_start : row_start + self.cols]
 
-            # Index labels
             for i, (grid, orig_idx, scores) in enumerate(row):
                 pos = row_start + i
                 is_cursor = pos == self.cursor
@@ -129,22 +124,19 @@ class ReviewGrid(Widget):
                 result.append(label, style=style)
             result.append("\n")
 
-            # Render art side by side
             rendered = [_render_small(g) for g, _, _ in row]
             n_lines = max(len(r) for r in rendered) if rendered else 0
 
             for line_idx in range(n_lines):
                 for j, piece_lines in enumerate(rendered):
-                    pos = row_start + j
-                    bg = "#2a2a3e" if pos == self.cursor else "#1a1a1a"
+                    result.append("  ")
                     if line_idx < len(piece_lines):
-                        result.append("  " + piece_lines[line_idx], style=f"white on {bg}")
+                        result.append(piece_lines[line_idx])
                     else:
-                        result.append("  " + " " * 16)
+                        result.append(" " * 16)
                     result.append("  ")
                 result.append("\n")
 
-            # Scores
             for grid, orig_idx, scores in row:
                 score = scores.get("composite", 0)
                 color = "green" if score >= 0.6 else "yellow" if score >= 0.4 else "red"
@@ -189,7 +181,6 @@ class DetailPanel(Widget):
         result.append(f"DETAIL — Piece #{self._index}{fav_mark}\n", style="bold magenta")
         result.append("─" * 50 + "\n", style="dim")
 
-        # Large render + scores side by side
         large_lines = _render_large(self._grid)
 
         score_lines = []
@@ -200,9 +191,8 @@ class DetailPanel(Widget):
             label = key.capitalize()[:10]
             score_lines.append((f"  {label:<11} {val:.3f} ", bar, color))
 
-        # VLM scores if present
         if "vlm_composite" in self._scores:
-            score_lines.append(("", "", "dim"))  # spacer
+            score_lines.append(("", "", "dim"))
             for key, label in [("vlm_interest", "VLM Intrs"), ("vlm_composition", "VLM Comp"), ("vlm_creativity", "VLM Creat"), ("vlm_composite", "VLM Score")]:
                 val = self._scores.get(key, 0)
                 bar = _score_bar(val)
@@ -213,7 +203,7 @@ class DetailPanel(Widget):
 
         for i in range(max_lines):
             if i < len(large_lines):
-                result.append(large_lines[i], style="bright_green on #0a0f0a")
+                result.append(large_lines[i])
             else:
                 result.append(" " * 32)
 
@@ -226,10 +216,9 @@ class DetailPanel(Widget):
 
             result.append("\n")
 
-        # VLM description
         vlm_desc = self._scores.get("vlm_description")
         if vlm_desc:
-            result.append("  🤖 VLM: ", style="bold cyan")
+            result.append("  VLM: ", style="bold cyan")
             desc = vlm_desc if len(vlm_desc) <= 100 else vlm_desc[:97] + "..."
             result.append(f"{desc}\n", style="italic white")
 

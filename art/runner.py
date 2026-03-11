@@ -70,11 +70,17 @@ class OvernightRunner:
         if latest_gen is None:
             return False
 
+        if self.event_bus:
+            self.event_bus.emit("init_phase", phase="resume")
+            self.event_bus.emit("resume_found", generation=latest_gen)
+
         # Load checkpoint from latest generation
         checkpoint_path = self.config.collections_dir / f"gen_{latest_gen}" / "checkpoint.pt"
         if checkpoint_path.exists():
             self.gas.trainer.load_checkpoint(checkpoint_path)
             print(f"Loaded checkpoint from generation {latest_gen}")
+            if self.event_bus:
+                self.event_bus.emit("resume_checkpoint", generation=latest_gen)
 
         # Set gas generation to latest + 1
         self.gas.generation = latest_gen + 1
@@ -90,12 +96,14 @@ class OvernightRunner:
         if self.config.bootstrap_dir.exists():
             bootstrap_files = sorted(self.config.bootstrap_dir.glob("pattern_*.png"))
             if bootstrap_files:
-                from art.utils import load_image
+                from art.tokenizer import PixelTokenizer
+                tokenizer = PixelTokenizer(self.config)
                 patterns = []
                 for img_path in bootstrap_files:
-                    img = load_image(img_path)
-                    pattern = (np.array(img) >= 128).astype(np.uint8)
-                    patterns.append(pattern)
+                    img = __import__("PIL").Image.open(img_path)
+                    tokens = tokenizer.encode(img)
+                    grid = tokenizer.decode_to_grid(tokens)
+                    patterns.append(grid)
                 self.bootstrap_patterns = patterns
                 print(f"Loaded {len(patterns)} bootstrap patterns")
 
@@ -103,11 +111,30 @@ class OvernightRunner:
 
     def initialize(self):
         """Generate bootstrap patterns and train model on bootstrap data."""
+        if self.event_bus:
+            self.event_bus.emit("init_phase", phase="bootstrap_gen")
         print("Initializing bootstrap patterns...")
-        self.bootstrap_patterns = generate_bootstrap_patterns(self.config)
-        save_bootstrap_patterns(self.bootstrap_patterns, self.config)
-        print(f"Generated and saved {len(self.bootstrap_patterns)} bootstrap patterns")
 
+        def on_gen_progress(done, total, category):
+            if self.event_bus:
+                self.event_bus.emit("bootstrap_progress", done=done, total=total, category=category)
+
+        self.bootstrap_patterns = generate_bootstrap_patterns(self.config, on_progress=on_gen_progress)
+
+        if self.event_bus:
+            self.event_bus.emit("init_phase", phase="bootstrap_save")
+
+        def on_save_progress(done, total):
+            if self.event_bus:
+                self.event_bus.emit("bootstrap_save_progress", done=done, total=total)
+
+        save_bootstrap_patterns(self.bootstrap_patterns, self.config, on_progress=on_save_progress)
+        print(f"Generated and saved {len(self.bootstrap_patterns)} bootstrap patterns")
+        if self.event_bus:
+            self.event_bus.emit("init_bootstrap_done", n_patterns=len(self.bootstrap_patterns))
+
+        if self.event_bus:
+            self.event_bus.emit("init_phase", phase="bootstrap_train")
         print("Starting bootstrap training...")
         dataset = PixelDataset(self.bootstrap_patterns, self.config)
         trainer = Trainer(self.model, self.config, self.device, event_bus=self.event_bus)
@@ -152,6 +179,8 @@ class OvernightRunner:
             # Clear cache if using MPS device
             if self.device.type == "mps":
                 torch.mps.empty_cache()
+                if self.event_bus:
+                    self.event_bus.emit("mps_cache_cleared")
 
             # Print generation summary
             mean_score = summary.get("mean_score", 0)

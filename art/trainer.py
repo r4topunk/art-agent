@@ -75,6 +75,9 @@ class Trainer:
         data_iter = iter(dataloader)
         use_amp = self.device.type == "mps"
 
+        # Preview interval: fire early so gallery isn't empty
+        preview_interval = min(500, max(10, steps // 4))
+
         if self.event_bus:
             self.event_bus.emit("train_start", total_steps=steps, phase="train")
 
@@ -98,7 +101,7 @@ class Trainer:
                     targets.reshape(-1),
                 )
 
-            if self.event_bus and step % 50 == 0:
+            if self.event_bus and (step == 1 or step % 10 == 0):
                 with torch.no_grad():
                     per_token = F.cross_entropy(
                         logits.float().reshape(-1, logits.size(-1)),
@@ -108,6 +111,41 @@ class Trainer:
                     )
                     per_pos = per_token.view(targets.shape).mean(dim=0)
                     self.event_bus.emit("token_difficulty", difficulties=per_pos.cpu().tolist())
+
+                    # Capture neural activity: layer activations + embedding similarity
+                    self.model.eval()
+                    _, activations = self.model.forward_with_activations(inputs[:1])
+                    self.model.train()
+
+                    gs = self.config.grid_size
+                    n_pixels = gs * gs
+                    layer_maps = []
+                    for act in activations:
+                        # act: (1, T, d_model) — take pixel positions, compute mean abs
+                        pixel_act = act[0, 1:n_pixels + 1, :].float().abs().mean(dim=-1)
+                        grid = pixel_act.reshape(gs, gs).cpu().numpy()
+                        layer_maps.append(grid)
+
+                    # Color embedding similarity (how the model sees color relationships)
+                    nc = self.config.n_colors
+                    emb = self.model.tok_emb.weight[:nc].detach().float()
+                    emb_norm = F.normalize(emb, dim=1)
+                    sim = (emb_norm @ emb_norm.T).cpu().numpy()
+
+                    # Per-layer weight energy
+                    weight_norms = []
+                    for block in self.model.blocks:
+                        norm = sum(p.data.float().abs().mean().item() for p in block.parameters())
+                        weight_norms.append(norm)
+
+                    self.event_bus.emit(
+                        "neural_activity",
+                        layer_maps=layer_maps,
+                        embedding_sim=sim,
+                        weight_norms=weight_norms,
+                        step=step,
+                        total_steps=steps,
+                    )
 
             self.optimizer.zero_grad()
             loss.backward()
@@ -122,6 +160,19 @@ class Trainer:
 
             if self.event_bus:
                 self.event_bus.emit("train_step", step=step, loss=loss_val, lr=current_lr, grad_norm=float(grad_norm))
+
+            # Periodically generate preview samples so the TUI can show the model learning
+            if self.event_bus and (step == 1 or step % preview_interval == 0):
+                self.model.eval()
+                with torch.no_grad():
+                    from art.tokenizer import PixelTokenizer
+                    tok = PixelTokenizer(self.config)
+                    preview_tokens = self.model.generate(
+                        batch_size=8, temperature=0.9, device="cpu"
+                    )
+                    grids = [tok.decode_to_grid(preview_tokens[i].tolist()) for i in range(preview_tokens.shape[0])]
+                self.model.train()
+                self.event_bus.emit("train_preview", grids=grids, step=step, total_steps=steps)
 
             if step % 100 == 0:
                 print(f"Step {step}/{steps} | Loss: {loss_val:.4f} | LR: {current_lr:.6f}")

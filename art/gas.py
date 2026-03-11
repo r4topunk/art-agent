@@ -49,10 +49,31 @@ class GASLoop:
         temperature = self.get_temperature()
         self.model.eval()
 
+        # Stream live progress to TUI: decode a subset every 2 rows (32 pixels)
+        display_n = min(8, n)
+        grid_size = self.config.grid_size
+        total_pixels = grid_size * grid_size
+        bus = self.event_bus
+
+        def on_token(t: int, seq, conf):
+            pixel = t - 1  # token 1 = pixel 0
+            if pixel % 16 == 0 and pixel >= 0 and bus:
+                partial_grids = []
+                for i in range(display_n):
+                    grid = self.tokenizer.decode_to_grid(seq[i].tolist())
+                    partial_grids.append(grid)
+                bus.emit(
+                    "gen_progress",
+                    grids=partial_grids,
+                    pixel=pixel,
+                    total_pixels=total_pixels,
+                )
+
         tokens, confidences = self.model.generate_with_confidence(
             batch_size=n,
             temperature=temperature,
             device=str(self.device),
+            on_token=on_token if bus else None,
         )
 
         if self.event_bus:
@@ -61,19 +82,46 @@ class GASLoop:
         pieces: list[np.ndarray] = []
         for i in range(tokens.shape[0]):
             token_list = tokens[i].tolist()
-            img = self.tokenizer.decode(token_list)
-            arr = np.array(img)
-            binary = (arr >= 128).astype(np.uint8)
-            pieces.append(binary)
+            grid = self.tokenizer.decode_to_grid(token_list)
+            pieces.append(grid)
         return pieces
 
     def evaluate(self, pieces: list[np.ndarray]) -> list[dict]:
-        scores = self.critic.score_batch(pieces)
+        if self.event_bus:
+            self.event_bus.emit("scoring_start", n_pieces=len(pieces))
+
+        def on_score_progress(done, total, latest_score):
+            if self.event_bus:
+                self.event_bus.emit(
+                    "scoring_progress",
+                    done=done, total=total,
+                    latest_composite=latest_score.get("composite", 0),
+                )
+
+        scores = self.critic.score_batch(pieces, on_progress=on_score_progress)
 
         if self.use_vlm:
             try:
                 from art.vlm_critic import score_batch_with_vlm
-                vlm_scores = score_batch_with_vlm(pieces, model=self.vlm_model)
+
+                def on_vlm_progress(done, total, result):
+                    if self.event_bus:
+                        idx = done - 1
+                        desc = result.get("vlm_description", "") if result else ""
+                        piece = pieces[idx] if idx < len(pieces) else None
+                        algo_score = scores[idx] if idx < len(scores) else {}
+                        vlm_scores_partial = {k: v for k, v in (result or {}).items()
+                                              if k.startswith("vlm_") and k != "vlm_description"}
+                        self.event_bus.emit(
+                            "vlm_progress",
+                            done=done, total=total,
+                            description=desc,
+                            piece=piece,
+                            algo_scores=algo_score,
+                            vlm_scores=vlm_scores_partial,
+                        )
+
+                vlm_scores = score_batch_with_vlm(pieces, model=self.vlm_model, on_progress=on_vlm_progress)
                 for i, vlm in enumerate(vlm_scores):
                     if vlm is not None:
                         scores[i]["vlm_interest"] = vlm["interest"]
@@ -142,15 +190,22 @@ class GASLoop:
         scores: list[dict],
         selections: list[int],
     ) -> None:
-        import PIL.Image
+        from art.config import PALETTE_16
 
         pieces_dir = gen_dir / "pieces"
         pieces_dir.mkdir(parents=True, exist_ok=True)
 
         for idx, piece in enumerate(pieces):
-            img_array = (piece * 255).astype(np.uint8)
-            img = PIL.Image.fromarray(img_array, mode="L")
+            # Convert color indices to RGB
+            h, w = piece.shape
+            rgb = np.zeros((h, w, 3), dtype=np.uint8)
+            for ci in range(self.config.n_colors):
+                mask = piece == ci
+                rgb[mask] = PALETTE_16[ci]
+            img = __import__("PIL").Image.fromarray(rgb, mode="RGB")
             img.save(pieces_dir / f"piece_{idx:04d}.png")
+            if self.event_bus and (idx + 1) % 8 == 0:
+                self.event_bus.emit("saving_piece", done=idx + 1, total=len(pieces))
 
         with open(gen_dir / "scores.json", "w") as f:
             json.dump(scores, f, indent=2)
@@ -203,8 +258,15 @@ class GASLoop:
         if self.event_bus:
             self.event_bus.emit("gen_selected", selected=selected, indices=selection_indices)
 
+        if self.event_bus:
+            self.event_bus.emit("finetune_start", n_selected=len(selected), generation=self.generation)
         self.finetune(selected, bootstrap_patterns=bootstrap_patterns)
+
+        if self.event_bus:
+            self.event_bus.emit("saving_start", generation=self.generation)
         self.save_generation(gen_dir, pieces, scores, selection_indices)
+        if self.event_bus:
+            self.event_bus.emit("saving_complete", generation=self.generation, n_pieces=len(pieces))
 
         composites = [s["composite"] for s in scores]
         summary = {

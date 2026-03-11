@@ -22,11 +22,15 @@ QUALITY_PROMPTS = [
 
 
 def _image_to_base64(grid: np.ndarray, scale: int = 16) -> str:
-    """Convert a grid to a base64-encoded RGB PNG scaled up for the VLM."""
-    arr = np.where(grid > 0, 255, 0).astype(np.uint8)
-    rgb = np.stack([arr, arr, arr], axis=-1)
+    """Convert a color-indexed grid to a base64-encoded RGB PNG scaled up for the VLM."""
+    from art.config import PALETTE_16
+    h, w = grid.shape
+    rgb = np.zeros((h, w, 3), dtype=np.uint8)
+    for ci in range(16):
+        mask = grid == ci
+        rgb[mask] = PALETTE_16[ci]
     img = Image.fromarray(rgb)
-    img = img.resize((grid.shape[1] * scale, grid.shape[0] * scale), Image.NEAREST)
+    img = img.resize((w * scale, h * scale), Image.NEAREST)
     buf = io.BytesIO()
     img.save(buf, format="PNG")
     return base64.b64encode(buf.getvalue()).decode("ascii")
@@ -132,10 +136,13 @@ def score_batch_with_vlm(
     grids: list[np.ndarray],
     model: str = "moondream",
     base_url: str = "http://localhost:11434",
+    on_progress=None,
 ) -> list[dict[str, float] | None]:
     """Score a batch of pieces. Returns list aligned with input (None for failures)."""
     results = []
-    for grid in grids:
+    for i, grid in enumerate(grids):
         result = score_with_vlm(grid, model=model, base_url=base_url)
         results.append(result)
+        if on_progress:
+            on_progress(i + 1, len(grids), result)
     return results

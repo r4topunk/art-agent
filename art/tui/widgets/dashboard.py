@@ -1,5 +1,4 @@
 from textual.widget import Widget
-from textual.reactive import reactive
 from rich.text import Text
 
 SPARK_CHARS = "▁▂▃▄▅▆▇█"
@@ -20,7 +19,6 @@ def mini_sparkline(values: list[float], width: int = 30) -> Text:
     if not values:
         return Text("─" * width, style="dim")
 
-    # Resample to width
     if len(values) > width:
         step = len(values) / width
         resampled = [values[int(i * step)] for i in range(width)]
@@ -31,13 +29,12 @@ def mini_sparkline(values: list[float], width: int = 30) -> Text:
     max_v = max(resampled)
     range_v = max_v - min_v if max_v > min_v else 1.0
 
-    spark = ""
+    result = Text()
     for v in resampled:
         idx = int((v - min_v) / range_v * (len(SPARK_CHARS) - 1))
         idx = max(0, min(len(SPARK_CHARS) - 1, idx))
-        spark += SPARK_CHARS[idx]
-
-    return Text(spark, style="cyan")
+        result.append(SPARK_CHARS[idx], style="cyan")
+    return result
 
 
 class EvolutionPanel(Widget):
@@ -52,8 +49,13 @@ class EvolutionPanel(Widget):
         super().__init__(**kwargs)
         self._mean_scores: list[float] = []
         self._max_scores: list[float] = []
+        self._vlm_mean_scores: list[float] = []
         self._latest_summary: dict | None = None
         self._latest_scores: list[dict] | None = None
+
+    @property
+    def _cw(self) -> int:
+        return max(16, self.size.width - 4)
 
     def update_generation(self, summary: dict) -> None:
         self._latest_summary = summary
@@ -63,24 +65,28 @@ class EvolutionPanel(Widget):
 
     def update_scores(self, scores: list[dict]) -> None:
         self._latest_scores = scores
+        vlm_vals = [s.get("vlm_composite", 0) for s in scores if "vlm_composite" in s]
+        if vlm_vals:
+            self._vlm_mean_scores.append(sum(vlm_vals) / len(vlm_vals))
         self.refresh()
 
     def render(self) -> Text:
+        cw = self._cw
+        spark_w = cw - 2
+        bar_w = max(6, cw - 14)
+
         result = Text()
         result.append("EVOLUTION\n", style="bold magenta")
-        result.append("─" * 26 + "\n", style="dim")
+        result.append("─" * cw + "\n", style="dim")
 
-        # Mean score trend
         result.append("Mean Score Trend\n", style="bold")
-        result.append(mini_sparkline(self._mean_scores))
+        result.append(mini_sparkline(self._mean_scores, width=spark_w))
         result.append("\n")
 
-        # Max score trend
         result.append("Max Score Trend\n", style="bold")
-        result.append(mini_sparkline(self._max_scores))
+        result.append(mini_sparkline(self._max_scores, width=spark_w))
         result.append("\n\n")
 
-        # Stats
         if self._latest_summary:
             s = self._latest_summary
             result.append(f"  Mean  {s.get('mean_score', 0):.3f}\n", style="white")
@@ -92,11 +98,9 @@ class EvolutionPanel(Widget):
             result.append(f"  Sel   {n_sel}/{n_tot}\n", style="cyan")
             result.append("\n")
 
-        # Score breakdown (from latest scored batch)
-        # Keys from ArtCritic.score_single: symmetry, complexity, aesthetics, diversity, composite
         if self._latest_scores:
             result.append("SCORE BREAKDOWN (avg)\n", style="bold")
-            result.append("─" * 26 + "\n", style="dim")
+            result.append("─" * cw + "\n", style="dim")
 
             keys = ["symmetry", "complexity", "structure", "aesthetics", "diversity"]
             for key in keys:
@@ -104,27 +108,16 @@ class EvolutionPanel(Widget):
                 avg = sum(vals) / len(vals) if vals else 0
                 label = key[:4].capitalize()
                 result.append(f"  {label:<5} {avg:.2f} ", style="white")
-                result.append(score_bar(avg))
+                result.append(score_bar(avg, width=bar_w))
                 result.append("\n")
 
-            # VLM scores (only shown when VLM is active)
-            has_vlm = any("vlm_composite" in s for s in self._latest_scores)
-            if has_vlm:
+            if self._vlm_mean_scores:
                 result.append("\n")
-                result.append("VLM SCORES (avg)\n", style="bold")
-                result.append("─" * 26 + "\n", style="dim")
-                vlm_keys = [
-                    ("vlm_interest", "Intr"),
-                    ("vlm_composition", "Comp"),
-                    ("vlm_creativity", "Crea"),
-                    ("vlm_composite", "VLM "),
-                ]
-                for key, label in vlm_keys:
-                    vals = [s.get(key, 0) for s in self._latest_scores if key in s]
-                    avg = sum(vals) / len(vals) if vals else 0
-                    result.append(f"  {label:<5} {avg:.2f} ", style="white")
-                    result.append(score_bar(avg))
-                    result.append("\n")
+                result.append("VLM TREND\n", style="bold bright_cyan")
+                result.append(mini_sparkline(self._vlm_mean_scores, width=spark_w))
+                result.append("\n")
+                vlm_avg = self._vlm_mean_scores[-1]
+                result.append(f"  VLM   {vlm_avg:.3f}\n", style="bright_cyan")
 
         return result
 
@@ -145,7 +138,11 @@ class TrainingPanel(Widget):
         self._lr = 0.0
         self._phase = ""
         self._losses: list[float] = []
-        self._max_display = 40
+        self._max_display = 80
+
+    @property
+    def _cw(self) -> int:
+        return max(16, self.size.width - 4)
 
     def update_step(self, step: int, loss: float, lr: float) -> None:
         self._step = step
@@ -164,9 +161,12 @@ class TrainingPanel(Widget):
         self.refresh()
 
     def render(self) -> Text:
+        cw = self._cw
+        bar_w = cw - 4
+
         result = Text()
         result.append("TRAINING\n", style="bold magenta")
-        result.append("─" * 22 + "\n", style="dim")
+        result.append("─" * cw + "\n", style="dim")
 
         result.append("  Phase: ", style="dim")
         result.append(f"{self._phase}\n", style="bold white")
@@ -174,12 +174,11 @@ class TrainingPanel(Widget):
         result.append("  Step:  ", style="dim")
         result.append(f"{self._step}/{self._total_steps}\n", style="bold cyan")
 
-        # Progress bar
         if self._total_steps > 0:
             pct = self._step / self._total_steps
-            filled = int(pct * 20)
-            bar = "█" * filled + "░" * (20 - filled)
-            result.append(f"  [{bar}]\n", style="green")
+            filled = int(pct * bar_w)
+            bar = BAR_FULL * filled + BAR_EMPTY * (bar_w - filled)
+            result.append(f"  {bar}\n", style="green")
 
         result.append("  Loss:  ", style="dim")
         result.append(f"{self._loss:.4f}\n", style="bold yellow")
@@ -188,12 +187,16 @@ class TrainingPanel(Widget):
         result.append(f"{self._lr:.6f}\n", style="white")
         result.append("\n")
 
-        # Sparkline
         if self._losses:
             result.append("  Loss curve:\n", style="dim")
             result.append("  ")
 
+            spark_w = cw - 4
             values = self._losses
+            if len(values) > spark_w:
+                step = len(values) / spark_w
+                values = [values[int(i * step)] for i in range(spark_w)]
+
             min_v = min(values)
             max_v = max(values)
             range_v = max_v - min_v if max_v > min_v else 1.0
