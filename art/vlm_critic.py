@@ -13,17 +13,19 @@ import numpy as np
 from PIL import Image
 
 
-# Keep it short — small VLMs choke on long prompts
-DESCRIBE_PROMPT = (
-    "Describe this pixel art in detail: what shapes, patterns, colors, "
-    "and composition do you see? Is it structured or chaotic?"
+# Ask for direct numeric scores — avoids unreliable keyword parsing
+SCORE_PROMPT = (
+    "Rate this pixel art image on three qualities from 0 to 10:\n"
+    "1. Appeal: how visually pleasing or interesting is it?\n"
+    "2. Composition: does it have clear structure, shapes, or patterns?\n"
+    "3. Intent: does it look deliberate rather than random noise?\n\n"
+    "Reply with exactly three integers separated by commas. Example: 7,5,8"
 )
 
-QUALITY_PROMPTS = [
-    ("Has clear structure or recognizable shapes (not random noise)?", "structure"),
-    ("Is this visually interesting or appealing?", "interest"),
-    ("Does this look like intentional art rather than a glitch?", "intentional"),
-]
+# Fallback describe prompt (used if numeric parsing fails)
+DESCRIBE_PROMPT = (
+    "Describe this pixel art briefly: what shapes or patterns do you see?"
+)
 
 
 def _image_to_base64(grid: np.ndarray, scale: int = 8) -> str:
@@ -74,40 +76,20 @@ def _call_vlm(
         return None
 
 
-def _description_to_score(description: str) -> dict[str, float]:
-    """Extract quality signals from a free-text description."""
-    desc = description.lower()
-
-    # Positive signals
-    structure_words = ["shape", "pattern", "square", "circle", "line", "cross",
-                       "diamond", "triangle", "grid", "border", "frame",
-                       "symmetric", "geometric", "design", "art", "pixel"]
-    interest_words = ["interesting", "complex", "detailed", "intricate",
-                      "colorful", "contrast", "unique", "striking",
-                      "beautiful", "creative", "abstract"]
-    # Negative signals
-    boring_words = ["blank", "empty", "nothing", "black", "plain",
-                    "simple dot", "single pixel", "noise", "random",
-                    "static", "just a"]
-
-    structure_hits = sum(1 for w in structure_words if w in desc)
-    interest_hits = sum(1 for w in interest_words if w in desc)
-    boring_hits = sum(1 for w in boring_words if w in desc)
-
-    # Convert to 0-1 scores
-    structure = min(1.0, structure_hits / 3.0)
-    interest = min(1.0, interest_hits / 2.0)
-    penalty = min(0.5, boring_hits * 0.15)
-
-    # Description length as a weak proxy for complexity
-    word_count = len(desc.split())
-    verbosity_bonus = min(0.3, word_count / 50.0)
-
-    return {
-        "interest": max(0, interest + verbosity_bonus - penalty),
-        "composition": max(0, structure - penalty),
-        "creativity": max(0, (interest + structure) / 2.0 + verbosity_bonus - penalty),
-    }
+def _parse_numeric_scores(response: str) -> dict[str, float] | None:
+    """Parse three comma-separated integers from a VLM response into 0-1 scores."""
+    numbers = re.findall(r'\b(\d+)\b', response)
+    if len(numbers) < 3:
+        return None
+    try:
+        appeal, composition, intent = [min(10, max(0, int(n))) for n in numbers[:3]]
+        return {
+            "interest": appeal / 10.0,
+            "composition": composition / 10.0,
+            "creativity": intent / 10.0,
+        }
+    except (ValueError, TypeError):
+        return None
 
 
 def score_with_vlm(
@@ -118,13 +100,23 @@ def score_with_vlm(
     """Score a single piece using a local VLM via Ollama API."""
     b64 = _image_to_base64(grid)
 
-    description = _call_vlm(b64, DESCRIBE_PROMPT, model=model, base_url=base_url)
-    if not description:
+    response = _call_vlm(b64, SCORE_PROMPT, model=model, base_url=base_url)
+    if not response:
         return None
 
-    scores = _description_to_score(description)
+    scores = _parse_numeric_scores(response)
+    if scores is None:
+        # Fallback: try description-based if numeric parsing fails
+        desc = _call_vlm(b64, DESCRIBE_PROMPT, model=model, base_url=base_url)
+        if not desc:
+            return None
+        # Minimal fallback scoring from description length
+        words = len(desc.split())
+        base = min(0.6, words / 40.0)
+        scores = {"interest": base, "composition": base, "creativity": base}
+        response = desc
 
-    scores["vlm_description"] = description.strip()
+    scores["vlm_description"] = response.strip()
     scores["vlm_composite"] = (
         0.4 * scores["interest"]
         + 0.3 * scores["composition"]
@@ -184,7 +176,7 @@ def benchmark_models(
                 descriptions.append(desc)
 
         avg_time = sum(times) / len(times) if times else 0
-        scores = _description_to_score(descriptions[-1]) if descriptions else {}
+        scores = _parse_numeric_scores(descriptions[-1]) if descriptions else {}
 
         results[model] = {
             "avg_time_s": round(avg_time, 2),

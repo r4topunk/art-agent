@@ -2,31 +2,31 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 
-# 8-color palette (RGB tuples) — max perceptual contrast
+# 8-color palette (RGB tuples) — PICO-8 bright/light colors
 PALETTE = [
-    (0, 0, 0),        # 0  black
-    (255, 255, 255),  # 1  white
-    (255, 0, 0),      # 2  red
-    (0, 0, 255),      # 3  blue
-    (0, 180, 0),      # 4  green
-    (255, 220, 0),    # 5  yellow
-    (255, 0, 255),    # 6  magenta
-    (0, 220, 220),    # 7  cyan
+    (0, 0, 0),          # 0  black
+    (255, 241, 232),    # 1  warm white/cream  #FFF1E8
+    (255, 0, 77),       # 2  bright red        #FF004D
+    (255, 163, 0),      # 3  orange            #FFA300
+    (255, 236, 39),     # 4  yellow            #FFEC27
+    (0, 228, 54),       # 5  bright green      #00E436
+    (41, 173, 255),     # 6  sky blue          #29ADFF
+    (255, 119, 168),    # 7  pink              #FF77A8
 ]
 
 # Back-compat alias used across the codebase
 PALETTE_16 = PALETTE
 
-# Terminal color names for Rich styling (matched to PALETTE indices)
+# Hex color strings for Rich styling (matched to PALETTE indices)
 PALETTE_TERM = [
-    "black",           # 0
-    "white",           # 1
-    "red",             # 2
-    "blue",            # 3
-    "green",           # 4
-    "yellow",          # 5
-    "magenta",         # 6
-    "cyan",            # 7
+    "#000000",   # 0  black
+    "#fff1e8",   # 1  cream
+    "#ff004d",   # 2  red
+    "#ffa300",   # 3  orange
+    "#ffec27",   # 4  yellow
+    "#00e436",   # 5  green
+    "#29adff",   # 6  blue
+    "#ff77a8",   # 7  pink
 ]
 
 

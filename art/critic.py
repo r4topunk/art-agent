@@ -14,19 +14,21 @@ def symmetry_score(grid: np.ndarray) -> float:
 
 
 def complexity_score(grid: np.ndarray, n_colors: int = 8) -> float:
-    """Measure visual complexity: color diversity, edges, entropy."""
+    """Measure visual complexity: color diversity, edges, entropy, transition variety."""
     size = grid.shape[0]
 
-    # Color usage: how many distinct colors are used (reward 3-6, penalize 1 or all 8)
+    # Color usage: sweet spot is 4-7 colors
     unique = len(np.unique(grid))
     if unique <= 1:
         color_score = 0.0
     elif unique <= 2:
-        color_score = 0.3
-    elif unique <= 6:
-        color_score = min(1.0, unique / 4.0)
+        color_score = 0.2
+    elif unique == 3:
+        color_score = 0.5
+    elif unique <= 7:
+        color_score = 1.0  # 4-7 colors = richest visual range
     else:
-        color_score = max(0.6, 1.0 - (unique - 6) / 4.0)
+        color_score = 0.75  # all 8 can get chaotic but still okay
 
     # Edge count: transitions between different colors
     h_edges = np.sum(grid[:, :-1] != grid[:, 1:])
@@ -42,17 +44,23 @@ def complexity_score(grid: np.ndarray, n_colors: int = 8) -> float:
         for j in range(n_blocks):
             block = grid[block_size * i:block_size * (i + 1),
                          block_size * j:block_size * (j + 1)]
-            # Count color frequencies
             counts = np.bincount(block.flatten(), minlength=n_colors)
             probs = counts / counts.sum()
             probs = probs[probs > 0]
             h = -np.sum(probs * np.log2(probs))
-            # Normalize by max entropy (log2(n_colors) = 3 for 8 colors)
             max_h = np.log2(n_colors)
             entropy_vals.append(h / max_h if max_h > 0 else 0)
     entropy_score = float(np.mean(entropy_vals)) if entropy_vals else 0.0
 
-    return float(np.mean([color_score, edge_score, entropy_score]))
+    # Color transition variety: how many distinct color-pair transitions exist
+    # This rewards patterns where many different colors appear next to each other
+    h_pairs = set(map(tuple, np.stack([grid[:, :-1].flatten(), grid[:, 1:].flatten()], axis=1)))
+    v_pairs = set(map(tuple, np.stack([grid[:-1, :].flatten(), grid[1:, :].flatten()], axis=1)))
+    distinct_transitions = len(h_pairs | v_pairs)
+    max_transitions = n_colors * (n_colors - 1)  # all distinct color-pair edges
+    transition_score = min(1.0, distinct_transitions / max(1, max_transitions * 0.4))
+
+    return float(np.mean([color_score, edge_score, entropy_score, transition_score]))
 
 
 def structure_score(grid: np.ndarray) -> float:
@@ -90,13 +98,13 @@ def structure_score(grid: np.ndarray) -> float:
             block = (grid[r, c], grid[r, c + 1], grid[r + 1, c], grid[r + 1, c + 1])
             blocks_2x2.add(block)
     n_patterns = len(blocks_2x2)
-    # With 16 colors, more distinct patterns expected. Sweet spot: 20-100
+    # Emergent patterns need rich local variety — sweet spot: 20-160
     if n_patterns <= 5:
         pattern_score = n_patterns / 10.0
-    elif n_patterns <= 100:
+    elif n_patterns <= 160:
         pattern_score = 1.0
     else:
-        pattern_score = max(0.3, 1 - (n_patterns - 100) / 200)
+        pattern_score = max(0.5, 1 - (n_patterns - 160) / 150)
 
     # Contiguous region analysis (flood fill by color)
     visited = np.zeros_like(grid, dtype=bool)
@@ -125,17 +133,20 @@ def structure_score(grid: np.ndarray) -> float:
     if regions:
         median_size = float(np.median(regions))
         n_regions = len(regions)
-        # Sweet spot: 5-30 regions with median size 4-20
-        if n_regions < 3:
-            region_quality = 0.2
-        elif n_regions > 80:
-            region_quality = 0.2
-        elif median_size < 2:
-            region_quality = 0.2  # too fragmented
-        elif median_size > size * size * 0.3:
-            region_quality = 0.3  # one huge blob
+        # Emergent patterns: many small-to-medium regions = texture and visual rhythm
+        # Sweet spot: 15-100 regions, median size 2-8 pixels
+        if n_regions < 4:
+            region_quality = 0.1  # almost no regions = flat fill
+        elif n_regions > 140:
+            region_quality = 0.3  # isolated pixels = noise
+        elif median_size < 1.5:
+            region_quality = 0.2  # single pixels = pure noise
+        elif median_size > size * size * 0.35:
+            region_quality = 0.1  # one giant blob = flat
         else:
-            region_quality = min(1.0, median_size / 8.0)
+            # Peak reward at median size 3-6 pixels (pattern-density sweet spot)
+            target = 4.5
+            region_quality = max(0.2, 1.0 - abs(median_size - target) / 12.0)
     else:
         region_quality = 0.0
 
@@ -174,16 +185,18 @@ def aesthetics_score(grid: np.ndarray, n_colors: int = 8) -> float:
     interior_dom = np.argmax(np.bincount(interior, minlength=n_colors)[:n_colors])
     framing_score = 1.0 if border_dom != interior_dom else 0.3
 
-    # Color harmony: reward palettes with some but not too many colors (8-color palette)
+    # Color harmony: reward rich palettes, penalize sparse (flat) ones
     unique = len(np.unique(grid))
     if unique <= 1:
         harmony = 0.0
-    elif unique <= 4:
-        harmony = 1.0  # limited palette = harmonious
+    elif unique <= 2:
+        harmony = 0.2  # nearly monochrome = boring
+    elif unique == 3:
+        harmony = 0.5
     elif unique <= 6:
-        harmony = 0.8
+        harmony = 1.0  # 4-6 colors = visual richness sweet spot
     else:
-        harmony = 0.5  # using all 7-8 colors can get chaotic
+        harmony = 0.8  # all 7-8 colors still good
 
     return float(np.mean([balance_score, framing_score, harmony]))
 
@@ -209,11 +222,11 @@ class ArtCritic:
         self.config = config
         if weights is None:
             self.weights = {
-                'symmetry': 0.15,
-                'complexity': 0.25,
-                'structure': 0.20,
-                'aesthetics': 0.15,
-                'diversity': 0.25,
+                'symmetry': 0.10,
+                'complexity': 0.30,
+                'structure': 0.25,
+                'aesthetics': 0.20,
+                'diversity': 0.15,
             }
         else:
             self.weights = weights
@@ -221,9 +234,14 @@ class ArtCritic:
     def score_single(self, grid: np.ndarray) -> dict:
         n_colors = self.config.n_colors
 
-        # Gate: penalize images that use only 1 color (flat fill)
+        # Gate: penalize flat/sparse images
         unique = len(np.unique(grid))
-        gate = 0.3 if unique <= 1 else 1.0
+        if unique <= 1:
+            gate = 0.2  # solid fill
+        elif unique <= 2:
+            gate = 0.6  # near-monochrome
+        else:
+            gate = 1.0
 
         sym = symmetry_score(grid)
         cplx = complexity_score(grid, n_colors)
