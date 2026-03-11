@@ -224,7 +224,7 @@ class DetailPanel(Widget):
 
         result.append("\n")
         result.append(
-            "  [←][→] Navigate   [↑][↓] Rows   [SPACE] Toggle favorite   [ESC] Back\n",
+            "  [←][→] Navigate   [↑][↓] Rows   [SPACE] Toggle favorite   [ENTER] Confirm   [ESC] Back\n",
             style="dim",
         )
 

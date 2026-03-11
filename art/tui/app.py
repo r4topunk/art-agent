@@ -74,6 +74,7 @@ class DashboardScreen(Screen):
 class ReviewScreen(Screen):
     BINDINGS = [
         ("escape", "app.pop_screen", "Back"),
+        ("enter", "confirm", "Confirm"),
         ("left", "move_left", "Left"),
         ("right", "move_right", "Right"),
         ("up", "move_up", "Up"),
@@ -115,6 +116,12 @@ class ReviewScreen(Screen):
         g.toggle_favorite()
         self._sync()
 
+    def action_confirm(self):
+        g = self.query_one("#review-grid", ReviewGrid)
+        favs = g.get_favorites()
+        self.app.set_human_picks(favs)
+        self.app.pop_screen()
+
     def _sync(self):
         g = self.query_one("#review-grid", ReviewGrid)
         d = self.query_one("#review-detail", DetailPanel)
@@ -153,6 +160,7 @@ class ArtApp(App):
         self._latest_selected_indices: list[int] = []
         self._latest_confidences: np.ndarray | None = None
         self._train_total_steps: int = 0
+        self._human_picks: list[int] | None = None  # set by review confirm
 
     def on_mount(self):
         self.push_screen(DashboardScreen())
@@ -643,7 +651,7 @@ class ArtApp(App):
     # --- Actions ---
 
     def action_switch_dashboard(self):
-        while len(self.screen_stack) > 1:
+        if not isinstance(self.screen, DashboardScreen):
             self.pop_screen()
 
     def action_switch_review(self):
@@ -662,6 +670,11 @@ class ArtApp(App):
                 s.query_one("#review-detail", DetailPanel).update_detail(grid, idx, scores, False)
         except Exception:
             pass
+
+    def set_human_picks(self, indices: list[int]):
+        """Called from ReviewScreen when user confirms favorites."""
+        self._human_picks = indices if indices else None
+        self._log("SELECT", "human", f"human override: {len(indices)} picks — {indices}")
 
     def action_quit(self):
         self.exit()
