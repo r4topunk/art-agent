@@ -31,3 +31,13 @@ data/
 
 # Textual dev tools
 .textual/
+
+# Hardhat / Node
+node_modules/
+artifacts/
+cache/
+typechain-types/
+
+# Deployment secrets & state
+.env
+deployment.json
