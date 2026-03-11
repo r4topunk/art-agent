@@ -80,6 +80,8 @@ class GASLoop:
                         scores[i]["vlm_composition"] = vlm["composition"]
                         scores[i]["vlm_creativity"] = vlm["creativity"]
                         scores[i]["vlm_composite"] = vlm["vlm_composite"]
+                        if "vlm_description" in vlm:
+                            scores[i]["vlm_description"] = vlm["vlm_description"]
                         # Blend: 50% algorithmic + 50% VLM
                         scores[i]["composite"] = (
                             0.5 * scores[i]["composite"]

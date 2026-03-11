@@ -107,6 +107,25 @@ class EvolutionPanel(Widget):
                 result.append(score_bar(avg))
                 result.append("\n")
 
+            # VLM scores (only shown when VLM is active)
+            has_vlm = any("vlm_composite" in s for s in self._latest_scores)
+            if has_vlm:
+                result.append("\n")
+                result.append("VLM SCORES (avg)\n", style="bold")
+                result.append("─" * 26 + "\n", style="dim")
+                vlm_keys = [
+                    ("vlm_interest", "Intr"),
+                    ("vlm_composition", "Comp"),
+                    ("vlm_creativity", "Crea"),
+                    ("vlm_composite", "VLM "),
+                ]
+                for key, label in vlm_keys:
+                    vals = [s.get(key, 0) for s in self._latest_scores if key in s]
+                    avg = sum(vals) / len(vals) if vals else 0
+                    result.append(f"  {label:<5} {avg:.2f} ", style="white")
+                    result.append(score_bar(avg))
+                    result.append("\n")
+
         return result
 
 

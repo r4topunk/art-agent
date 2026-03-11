@@ -26,11 +26,13 @@ class BirthWidget(Widget):
         self._confidences: np.ndarray | None = None  # 256 floats
         self._filled: int = 0  # how many pixels filled so far
         self._grid_size: int = 16
+        self._vlm_description: str | None = None
 
-    def update_birth(self, grid: np.ndarray, confidences: np.ndarray, piece_index: int = 0):
+    def update_birth(self, grid: np.ndarray, confidences: np.ndarray, piece_index: int = 0, vlm_description: str | None = None):
         """Show a completed piece with its confidence map."""
         self._grid = grid
         self._confidences = confidences
+        self._vlm_description = vlm_description
         self._filled = self._grid_size * self._grid_size
         self.refresh()
 
@@ -142,5 +144,15 @@ class BirthWidget(Widget):
                     color = self._conf_color(c)
                     result.append(SPARK[idx], style=color)
                 result.append("\n")
+
+        # VLM description
+        if self._vlm_description:
+            result.append("\n")
+            result.append("  🤖 VLM says: ", style="bold cyan")
+            # Truncate to ~60 chars to fit panel
+            desc = self._vlm_description
+            if len(desc) > 80:
+                desc = desc[:77] + "..."
+            result.append(f"{desc}\n", style="italic white")
 
         return result

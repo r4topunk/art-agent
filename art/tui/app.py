@@ -243,15 +243,16 @@ class ArtApp(App):
             s.query_one("#gallery-panel", GalleryGrid).update_pieces(pieces, scores)
             s.query_one("#evolution-panel", EvolutionPanel).update_scores(scores)
 
-            # Birth: show best piece with its confidence
+            # Birth: show best piece with its confidence + VLM description
             ranked = sorted(range(len(scores)), key=lambda i: scores[i].get("composite", 0), reverse=True)
             if ranked:
                 best_idx = ranked[0]
                 conf = np.zeros(256)
                 if self._latest_confidences is not None and best_idx < self._latest_confidences.shape[0]:
                     conf = self._latest_confidences[best_idx, 1:257]
+                vlm_desc = scores[best_idx].get("vlm_description")
                 s.query_one("#birth", BirthWidget).update_birth(
-                    pieces[best_idx], conf, best_idx,
+                    pieces[best_idx], conf, best_idx, vlm_description=vlm_desc,
                 )
 
             s.query_one(HeaderWidget).phase = "Selecting & Finetuning..."
