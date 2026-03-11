@@ -30,16 +30,33 @@ class WallpaperWidget(Widget):
         self._generation: int = 0
         self._finetune_step: int = 0
         self._finetune_total: int = 0
+        self._all_gens: list[list[np.ndarray]] = []  # scored grids per gen, for cycling
+        self._cycle_index: int = 0
+
+    def on_mount(self):
+        self.set_interval(2.5, self._cycle_next_gen)
+
+    def _cycle_next_gen(self):
+        """During finetuning, rotate through all scored generations on the mural."""
+        if self._phase == "finetuning" and len(self._all_gens) > 1:
+            self._cycle_index = (self._cycle_index + 1) % len(self._all_gens)
+            self._grids = self._all_gens[self._cycle_index]
+            self.refresh()
 
     # ------------------------------------------------------------------ events from app
 
     def update_gen_start(self, generation: int, temperature: float):
         self._generation = generation
+        if generation == 0:
+            # Hide gen 0 — keep waiting state, nothing to show yet
+            return
         # Keep previous grids visible until new pixels arrive
         self._phase = "generating"
         self.refresh()
 
     def update_progress(self, grids: list[np.ndarray], pixel: int, total_pixels: int):
+        if self._generation == 0:
+            return  # Don't show gen 0 live pixels
         self._grids = grids
         self._phase = "generating"
         self.refresh()
@@ -51,6 +68,10 @@ class WallpaperWidget(Widget):
     def update_scored(self, pieces: list[np.ndarray], scores: list[dict]):
         self._grids = pieces
         self._phase = "scored"
+        # Accumulate for finetuning slideshow (deduplicate by identity)
+        if not self._all_gens or self._all_gens[-1] is not pieces:
+            self._all_gens.append(pieces)
+            self._cycle_index = len(self._all_gens) - 1
         self.refresh()
 
     def update_selected(self, indices: list[int]):
