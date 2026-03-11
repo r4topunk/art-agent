@@ -139,35 +139,55 @@ class OvernightRunner:
 
     def initialize(self):
         """Generate bootstrap patterns and train model on bootstrap data."""
-        if self.event_bus:
-            self.event_bus.emit("init_phase", phase="bootstrap_gen")
-        print("Initializing bootstrap patterns...")
+        bootstrap_ckpt = self.config.data_dir / "bootstrap_checkpoint.pt"
 
-        def on_gen_progress(done, total, category):
+        # Load bootstrap patterns (generate + save if not already on disk)
+        bootstrap_files = sorted(self.config.bootstrap_dir.glob("pattern_*.png")) if self.config.bootstrap_dir.exists() else []
+        if bootstrap_files:
+            from art.tokenizer import PixelTokenizer
+            tokenizer = PixelTokenizer(self.config)
+            self.bootstrap_patterns = []
+            for img_path in bootstrap_files:
+                img = __import__("PIL").Image.open(img_path)
+                tokens = tokenizer.encode(img)
+                self.bootstrap_patterns.append(tokenizer.decode_to_grid(tokens))
+            print(f"Loaded {len(self.bootstrap_patterns)} existing bootstrap patterns")
+        else:
             if self.event_bus:
-                self.event_bus.emit("bootstrap_progress", done=done, total=total, category=category)
+                self.event_bus.emit("init_phase", phase="bootstrap_gen")
+            print("Initializing bootstrap patterns...")
 
-        self.bootstrap_patterns = generate_bootstrap_patterns(self.config, on_progress=on_gen_progress)
+            def on_gen_progress(done, total, category):
+                if self.event_bus:
+                    self.event_bus.emit("bootstrap_progress", done=done, total=total, category=category)
 
-        if self.event_bus:
-            self.event_bus.emit("init_phase", phase="bootstrap_save")
+            self.bootstrap_patterns = generate_bootstrap_patterns(self.config, on_progress=on_gen_progress)
 
-        def on_save_progress(done, total):
             if self.event_bus:
-                self.event_bus.emit("bootstrap_save_progress", done=done, total=total)
+                self.event_bus.emit("init_phase", phase="bootstrap_save")
 
-        save_bootstrap_patterns(self.bootstrap_patterns, self.config, on_progress=on_save_progress)
-        print(f"Generated and saved {len(self.bootstrap_patterns)} bootstrap patterns")
-        if self.event_bus:
-            self.event_bus.emit("init_bootstrap_done", n_patterns=len(self.bootstrap_patterns))
+            def on_save_progress(done, total):
+                if self.event_bus:
+                    self.event_bus.emit("bootstrap_save_progress", done=done, total=total)
 
-        if self.event_bus:
-            self.event_bus.emit("init_phase", phase="bootstrap_train")
-        print("Starting bootstrap training...")
-        dataset = PixelDataset(self.bootstrap_patterns, self.config)
-        trainer = Trainer(self.model, self.config, self.device, event_bus=self.event_bus)
-        trainer.train(dataset, steps=self.config.train_steps)
-        print("Bootstrap training complete")
+            save_bootstrap_patterns(self.bootstrap_patterns, self.config, on_progress=on_save_progress)
+            print(f"Generated and saved {len(self.bootstrap_patterns)} bootstrap patterns")
+            if self.event_bus:
+                self.event_bus.emit("init_bootstrap_done", n_patterns=len(self.bootstrap_patterns))
+
+        # Load or run bootstrap training
+        if bootstrap_ckpt.exists():
+            self.gas.trainer.load_checkpoint(bootstrap_ckpt)
+            print(f"Loaded bootstrap checkpoint (skipping {self.config.train_steps} training steps)")
+        else:
+            if self.event_bus:
+                self.event_bus.emit("init_phase", phase="bootstrap_train")
+            print("Starting bootstrap training...")
+            dataset = PixelDataset(self.bootstrap_patterns, self.config)
+            trainer = Trainer(self.model, self.config, self.device, event_bus=self.event_bus)
+            trainer.train(dataset, steps=self.config.train_steps)
+            self.gas.trainer.save_checkpoint(bootstrap_ckpt)
+            print(f"Bootstrap training complete — checkpoint saved to {bootstrap_ckpt}")
 
     def save_evolution_log(self):
         """Atomically save evolution_log to JSON file."""
