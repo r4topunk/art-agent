@@ -2,44 +2,31 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 
-# 16-color palette (RGB tuples) — CGA/terminal-inspired
-PALETTE_16 = [
+# 8-color palette (RGB tuples) — max perceptual contrast
+PALETTE = [
     (0, 0, 0),        # 0  black
-    (128, 0, 0),      # 1  dark red
-    (0, 128, 0),      # 2  dark green
-    (128, 128, 0),    # 3  dark yellow / olive
-    (0, 0, 128),      # 4  dark blue
-    (128, 0, 128),    # 5  dark magenta
-    (0, 128, 128),    # 6  dark cyan
-    (192, 192, 192),  # 7  light gray
-    (128, 128, 128),  # 8  dark gray
-    (255, 0, 0),      # 9  red
-    (0, 255, 0),      # 10 green
-    (255, 255, 0),    # 11 yellow
-    (0, 0, 255),      # 12 blue
-    (255, 0, 255),    # 13 magenta
-    (0, 255, 255),    # 14 cyan
-    (255, 255, 255),  # 15 white
+    (255, 255, 255),  # 1  white
+    (255, 0, 0),      # 2  red
+    (0, 0, 255),      # 3  blue
+    (0, 180, 0),      # 4  green
+    (255, 220, 0),    # 5  yellow
+    (255, 0, 255),    # 6  magenta
+    (0, 220, 220),    # 7  cyan
 ]
 
-# Terminal color names for Rich styling (matched to PALETTE_16 indices)
+# Back-compat alias used across the codebase
+PALETTE_16 = PALETTE
+
+# Terminal color names for Rich styling (matched to PALETTE indices)
 PALETTE_TERM = [
     "black",           # 0
-    "dark_red",        # 1
-    "green4",          # 2
-    "yellow4",         # 3
-    "dark_blue",       # 4
-    "dark_magenta",    # 5
-    "dark_cyan",       # 6
-    "grey74",          # 7
-    "grey50",          # 8
-    "red",             # 9
-    "green",           # 10
-    "yellow",          # 11
-    "blue",            # 12
-    "magenta",         # 13
-    "cyan",            # 14
-    "white",           # 15
+    "white",           # 1
+    "red",             # 2
+    "blue",            # 3
+    "green",           # 4
+    "yellow",          # 5
+    "magenta",         # 6
+    "cyan",            # 7
 ]
 
 
@@ -62,24 +49,25 @@ class ArtConfig:
     train_steps: int = 80
 
     # GAS
-    images_per_gen: int = 32
-    select_top: int = 12
-    finetune_steps: int = 80
+    images_per_gen: int = 12
+    select_top: int = 3
+    finetune_steps: int = 30
     finetune_lr: float = 1e-4
 
     # GAS extras
-    bootstrap_mix_ratio: float = 0.2
-    bootstrap_mix_interval: int = 5
+    bootstrap_mix_ratio: float = 0.5
+    bootstrap_mix_interval: int = 1
     temp_start: float = 1.0
-    temp_end: float = 0.7
+    temp_end: float = 0.8
     temp_generations: int = 50
+    temp_diversity_floor: float = 0.15  # spike temp when batch diversity drops below this
 
-    # Vocab — 16 color tokens (0-15) + special tokens
-    n_colors: int = 16
-    BOS: int = 16
-    EOS: int = 17
-    PAD: int = 18
-    vocab_size: int = 19
+    # Vocab — 8 color tokens (0-7) + special tokens
+    n_colors: int = 8
+    BOS: int = 8
+    EOS: int = 9
+    PAD: int = 10
+    vocab_size: int = 11
 
     # Paths
     data_dir: Path = field(default_factory=lambda: Path("data"))

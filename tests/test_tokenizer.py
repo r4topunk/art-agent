@@ -24,7 +24,7 @@ def random_image(config):
     rng = random.Random(42)
     size = config.grid_size
     img = PIL.Image.new("RGB", (size, size))
-    pixels = [PALETTE_16[rng.randint(0, 15)] for _ in range(size * size)]
+    pixels = [PALETTE_16[rng.randint(0, len(PALETTE_16) - 1)] for _ in range(size * size)]
     img.putdata(pixels)
     return img
 
@@ -80,15 +80,15 @@ def test_decode_to_grid(tokenizer, config):
 
 
 def test_encode_grid(tokenizer, config):
-    grid = np.full((16, 16), 10, dtype=np.uint8)
+    grid = np.full((16, 16), 5, dtype=np.uint8)
     tokens = tokenizer.encode_grid(grid)
     assert tokens[0] == config.BOS
     assert tokens[-1] == config.EOS
-    assert all(t == 10 for t in tokens[1:-1])
+    assert all(t == 5 for t in tokens[1:-1])
 
 
 def test_vocab_size(tokenizer):
-    assert tokenizer.vocab_size == 19  # 16 colors + BOS + EOS + PAD
+    assert tokenizer.vocab_size == 11  # 8 colors + BOS + EOS + PAD
 
 
 def test_seq_length(tokenizer):

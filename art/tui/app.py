@@ -52,7 +52,7 @@ class DashboardScreen(Screen):
         with Vertical(id="main-grid"):
             with Horizontal(id="top-row"):
                 yield TrainingPanel(id="training-panel")
-                yield GalleryGrid(cols=4, max_pieces=16, id="gallery-panel")
+                yield GalleryGrid(cols=4, max_pieces=12, id="gallery-panel")
                 yield EvolutionPanel(id="evolution-panel")
             with Horizontal(id="bottom-row"):
                 yield HeartbeatWidget(id="heartbeat")
@@ -572,6 +572,10 @@ class ArtApp(App):
         self.call_from_thread(self._u_gen_selected, indices)
 
     def _u_gen_selected(self, indices: list[int]):
+        try:
+            self.screen.query_one("#gallery-panel", GalleryGrid).mark_selected(indices)
+        except Exception:
+            pass
         self._log("SELECT", "gas", f"selected {len(indices)} pieces — indices: {indices[:8]}{'...' if len(indices) > 8 else ''}")
 
     def _on_gen_complete(self, summary: dict):

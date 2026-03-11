@@ -5,6 +5,8 @@ import base64
 import io
 import json
 import re
+import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from urllib.request import Request, urlopen
 
 import numpy as np
@@ -12,7 +14,10 @@ from PIL import Image
 
 
 # Keep it short — small VLMs choke on long prompts
-DESCRIBE_PROMPT = "What do you see in this pixel art?"
+DESCRIBE_PROMPT = (
+    "Describe this pixel art in detail: what shapes, patterns, colors, "
+    "and composition do you see? Is it structured or chaotic?"
+)
 
 QUALITY_PROMPTS = [
     ("Has clear structure or recognizable shapes (not random noise)?", "structure"),
@@ -21,14 +26,14 @@ QUALITY_PROMPTS = [
 ]
 
 
-def _image_to_base64(grid: np.ndarray, scale: int = 16) -> str:
+def _image_to_base64(grid: np.ndarray, scale: int = 8) -> str:
     """Convert a color-indexed grid to a base64-encoded RGB PNG scaled up for the VLM."""
-    from art.config import PALETTE_16
+    from art.config import PALETTE
     h, w = grid.shape
     rgb = np.zeros((h, w, 3), dtype=np.uint8)
-    for ci in range(16):
+    for ci in range(len(PALETTE)):
         mask = grid == ci
-        rgb[mask] = PALETTE_16[ci]
+        rgb[mask] = PALETTE[ci]
     img = Image.fromarray(rgb)
     img = img.resize((w * scale, h * scale), Image.NEAREST)
     buf = io.BytesIO()
@@ -110,11 +115,7 @@ def score_with_vlm(
     model: str = "moondream",
     base_url: str = "http://localhost:11434",
 ) -> dict[str, float] | None:
-    """Score a single piece using a local VLM via Ollama API.
-
-    Uses description-based scoring since small VLMs struggle with
-    structured numeric output.
-    """
+    """Score a single piece using a local VLM via Ollama API."""
     b64 = _image_to_base64(grid)
 
     description = _call_vlm(b64, DESCRIBE_PROMPT, model=model, base_url=base_url)
@@ -137,12 +138,60 @@ def score_batch_with_vlm(
     model: str = "moondream",
     base_url: str = "http://localhost:11434",
     on_progress=None,
+    max_workers: int = 2,
 ) -> list[dict[str, float] | None]:
-    """Score a batch of pieces. Returns list aligned with input (None for failures)."""
-    results = []
-    for i, grid in enumerate(grids):
-        result = score_with_vlm(grid, model=model, base_url=base_url)
-        results.append(result)
-        if on_progress:
-            on_progress(i + 1, len(grids), result)
+    """Score a batch of pieces with concurrent requests for pipelining."""
+    results: list[dict[str, float] | None] = [None] * len(grids)
+    done_count = 0
+
+    def _score_one(idx: int) -> tuple[int, dict[str, float] | None]:
+        return idx, score_with_vlm(grids[idx], model=model, base_url=base_url)
+
+    with ThreadPoolExecutor(max_workers=max_workers) as pool:
+        futures = {pool.submit(_score_one, i): i for i in range(len(grids))}
+        for future in as_completed(futures):
+            idx, result = future.result()
+            results[idx] = result
+            done_count += 1
+            if on_progress:
+                on_progress(done_count, len(grids), result)
+
+    return results
+
+
+def benchmark_models(
+    grid: np.ndarray,
+    models: list[str],
+    base_url: str = "http://localhost:11434",
+    runs: int = 3,
+) -> dict[str, dict]:
+    """Benchmark multiple VLM models on a single image. Returns timing and score info."""
+    b64 = _image_to_base64(grid)
+    results = {}
+
+    for model in models:
+        # Warm up: load model into memory
+        _call_vlm(b64, "hi", model=model, base_url=base_url)
+
+        times = []
+        descriptions = []
+        for _ in range(runs):
+            t0 = time.perf_counter()
+            desc = _call_vlm(b64, DESCRIBE_PROMPT, model=model, base_url=base_url)
+            elapsed = time.perf_counter() - t0
+            times.append(elapsed)
+            if desc:
+                descriptions.append(desc)
+
+        avg_time = sum(times) / len(times) if times else 0
+        scores = _description_to_score(descriptions[-1]) if descriptions else {}
+
+        results[model] = {
+            "avg_time_s": round(avg_time, 2),
+            "min_time_s": round(min(times), 2) if times else 0,
+            "max_time_s": round(max(times), 2) if times else 0,
+            "sample_description": descriptions[-1].strip() if descriptions else "FAILED",
+            "scores": scores,
+        }
+
     return results

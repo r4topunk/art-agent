@@ -7,7 +7,7 @@ from art.critic import (
     aesthetics_score,
     complexity_score,
     structure_score,
-    diversity_bonus,
+    per_image_diversity,
     symmetry_score,
 )
 
@@ -39,9 +39,9 @@ def test_symmetry_perfect():
 
 def test_symmetry_random():
     rng = np.random.RandomState(123)
-    scores = [symmetry_score(rng.randint(0, 16, (16, 16)).astype(np.uint8)) for _ in range(20)]
+    scores = [symmetry_score(rng.randint(0, 8, (16, 16)).astype(np.uint8)) for _ in range(20)]
     avg = float(np.mean(scores))
-    assert avg < 0.3, f"Random 16-color grids should have low symmetry, got avg={avg}"
+    assert avg < 0.3, f"Random 8-color grids should have low symmetry, got avg={avg}"
 
 
 # ---------------------------------------------------------------------------
@@ -92,7 +92,7 @@ def test_score_single_keys(critic):
 
 def test_rank_ordering(critic):
     rng = np.random.RandomState(99)
-    grids = [rng.randint(0, 16, (16, 16)).astype(np.uint8) for _ in range(5)]
+    grids = [rng.randint(0, 8, (16, 16)).astype(np.uint8) for _ in range(5)]
     ranked = critic.rank(grids)
     composites = [entry[1]["composite"] for entry in ranked]
     assert composites == sorted(composites, reverse=True)
@@ -105,12 +105,21 @@ def test_rank_ordering(critic):
 def test_diversity_identical():
     grid = np.zeros((16, 16), dtype=np.uint8)
     grids = [grid.copy() for _ in range(5)]
-    bonus = diversity_bonus(grids)
-    assert bonus < 0.05, f"Identical grids should have diversity ~0, got {bonus}"
+    scores = per_image_diversity(grids)
+    assert all(s < 0.05 for s in scores), f"Identical grids should have diversity ~0, got {scores}"
 
 
 def test_diversity_different():
     g1 = np.zeros((16, 16), dtype=np.uint8)
-    g2 = np.full((16, 16), 15, dtype=np.uint8)
-    bonus = diversity_bonus([g1, g2])
-    assert bonus > 0.9, f"Completely different grids should have high diversity, got {bonus}"
+    g2 = np.full((16, 16), 7, dtype=np.uint8)
+    scores = per_image_diversity([g1, g2])
+    assert all(s > 0.9 for s in scores), f"Completely different grids should have high diversity, got {scores}"
+
+
+def test_diversity_outlier_gets_higher_score():
+    """An outlier should score higher than clones."""
+    clone = np.zeros((16, 16), dtype=np.uint8)
+    outlier = np.full((16, 16), 7, dtype=np.uint8)
+    grids = [clone.copy(), clone.copy(), clone.copy(), outlier]
+    scores = per_image_diversity(grids)
+    assert scores[3] > scores[0], f"Outlier should score higher: outlier={scores[3]}, clone={scores[0]}"

@@ -13,20 +13,20 @@ def symmetry_score(grid: np.ndarray) -> float:
     return float(np.mean([h_sym, v_sym, r180_sym, r90_sym]))
 
 
-def complexity_score(grid: np.ndarray, n_colors: int = 16) -> float:
+def complexity_score(grid: np.ndarray, n_colors: int = 8) -> float:
     """Measure visual complexity: color diversity, edges, entropy."""
     size = grid.shape[0]
 
-    # Color usage: how many distinct colors are used (reward 3-10, penalize 1 or all 16)
+    # Color usage: how many distinct colors are used (reward 3-6, penalize 1 or all 8)
     unique = len(np.unique(grid))
     if unique <= 1:
         color_score = 0.0
     elif unique <= 2:
         color_score = 0.3
-    elif unique <= 10:
-        color_score = min(1.0, unique / 6.0)
+    elif unique <= 6:
+        color_score = min(1.0, unique / 4.0)
     else:
-        color_score = max(0.5, 1.0 - (unique - 10) / 10.0)
+        color_score = max(0.6, 1.0 - (unique - 6) / 4.0)
 
     # Edge count: transitions between different colors
     h_edges = np.sum(grid[:, :-1] != grid[:, 1:])
@@ -47,7 +47,7 @@ def complexity_score(grid: np.ndarray, n_colors: int = 16) -> float:
             probs = counts / counts.sum()
             probs = probs[probs > 0]
             h = -np.sum(probs * np.log2(probs))
-            # Normalize by max entropy (log2(n_colors) ≈ 4 for 16 colors)
+            # Normalize by max entropy (log2(n_colors) = 3 for 8 colors)
             max_h = np.log2(n_colors)
             entropy_vals.append(h / max_h if max_h > 0 else 0)
     entropy_score = float(np.mean(entropy_vals)) if entropy_vals else 0.0
@@ -142,7 +142,7 @@ def structure_score(grid: np.ndarray) -> float:
     return float(np.mean([row_autocorr, col_autocorr, pattern_score, region_quality]))
 
 
-def aesthetics_score(grid: np.ndarray) -> float:
+def aesthetics_score(grid: np.ndarray, n_colors: int = 8) -> float:
     """Evaluate aesthetic qualities: balance, framing, color harmony."""
     size = grid.shape[0]
 
@@ -155,7 +155,7 @@ def aesthetics_score(grid: np.ndarray) -> float:
     # Compare color frequency vectors across quadrants
     freq_vecs = []
     for q in quadrants:
-        counts = np.bincount(q.flatten(), minlength=16).astype(float)
+        counts = np.bincount(q.flatten(), minlength=n_colors)[:n_colors].astype(float)
         counts /= counts.sum() + 1e-8
         freq_vecs.append(counts)
     # Balance = low variance of frequency vectors
@@ -170,43 +170,34 @@ def aesthetics_score(grid: np.ndarray) -> float:
     ])
     interior = grid[1:-1, 1:-1].flatten()
     # Compare dominant colors
-    border_dom = np.argmax(np.bincount(border, minlength=16))
-    interior_dom = np.argmax(np.bincount(interior, minlength=16))
+    border_dom = np.argmax(np.bincount(border, minlength=n_colors)[:n_colors])
+    interior_dom = np.argmax(np.bincount(interior, minlength=n_colors)[:n_colors])
     framing_score = 1.0 if border_dom != interior_dom else 0.3
 
-    # Color harmony: reward palettes with some but not too many colors
+    # Color harmony: reward palettes with some but not too many colors (8-color palette)
     unique = len(np.unique(grid))
     if unique <= 1:
         harmony = 0.0
-    elif unique <= 5:
+    elif unique <= 4:
         harmony = 1.0  # limited palette = harmonious
-    elif unique <= 10:
-        harmony = 0.7
+    elif unique <= 6:
+        harmony = 0.8
     else:
-        harmony = 0.4  # too many colors = chaotic
+        harmony = 0.5  # using all 7-8 colors can get chaotic
 
     return float(np.mean([balance_score, framing_score, harmony]))
 
 
-def diversity_bonus(grids: list[np.ndarray]) -> float:
-    if len(grids) < 2:
-        return 0.0
-
-    pairs_to_sample = min(50, len(grids) * (len(grids) - 1) // 2)
-    distances = []
-    sampled_count = 0
-
-    for i in range(len(grids)):
-        for j in range(i + 1, len(grids)):
-            if sampled_count >= pairs_to_sample:
-                break
-            hamming = float(np.sum(grids[i] != grids[j])) / grids[i].size
-            distances.append(hamming)
-            sampled_count += 1
-        if sampled_count >= pairs_to_sample:
-            break
-
-    return float(np.mean(distances)) if distances else 0.0
+def per_image_diversity(grids: list[np.ndarray]) -> list[float]:
+    """Per-image novelty: mean hamming distance to all other images in the batch."""
+    n = len(grids)
+    if n < 2:
+        return [0.0] * n
+    scores = []
+    for i in range(n):
+        dists = [float(np.sum(grids[i] != grids[j])) / grids[i].size for j in range(n) if j != i]
+        scores.append(float(np.mean(dists)))
+    return scores
 
 
 class ArtCritic:
@@ -218,11 +209,11 @@ class ArtCritic:
         self.config = config
         if weights is None:
             self.weights = {
-                'symmetry': 0.20,
-                'complexity': 0.30,
-                'structure': 0.25,
+                'symmetry': 0.15,
+                'complexity': 0.25,
+                'structure': 0.20,
                 'aesthetics': 0.15,
-                'diversity': 0.10,
+                'diversity': 0.25,
             }
         else:
             self.weights = weights
@@ -237,7 +228,7 @@ class ArtCritic:
         sym = symmetry_score(grid)
         cplx = complexity_score(grid, n_colors)
         struct = structure_score(grid)
-        aes = aesthetics_score(grid)
+        aes = aesthetics_score(grid, n_colors)
 
         composite = (
             self.weights['symmetry'] * sym +
@@ -256,18 +247,18 @@ class ArtCritic:
         }
 
     def score_batch(self, grids: list[np.ndarray], on_progress=None) -> list[dict]:
-        div_bonus = diversity_bonus(grids)
+        div_scores = per_image_diversity(grids)
 
         scores = []
         for i, grid in enumerate(grids):
             score_dict = self.score_single(grid)
-            score_dict['diversity'] = div_bonus
+            score_dict['diversity'] = div_scores[i]
             score_dict['composite'] = (
                 score_dict['composite'] +
-                self.weights['diversity'] * div_bonus
+                self.weights['diversity'] * div_scores[i]
             )
             scores.append(score_dict)
-            if on_progress and (i + 1) % 8 == 0:
+            if on_progress and (i + 1) % 4 == 0:
                 on_progress(i + 1, len(grids), score_dict)
 
         return scores

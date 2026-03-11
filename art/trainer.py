@@ -96,10 +96,14 @@ class Trainer:
 
             with torch.autocast(self.device.type, enabled=use_amp):
                 logits = self.model(inputs)
-                loss = self.loss_fn(
+                ce_loss = self.loss_fn(
                     logits.reshape(-1, logits.size(-1)),
                     targets.reshape(-1),
                 )
+                # Entropy regularization: penalize overconfident predictions
+                probs = F.softmax(logits.float(), dim=-1)
+                entropy = -torch.sum(probs * torch.log(probs + 1e-8), dim=-1).mean()
+                loss = ce_loss - 0.02 * entropy
 
             if self.event_bus and (step == 1 or step % 10 == 0):
                 with torch.no_grad():

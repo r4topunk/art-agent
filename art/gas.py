@@ -36,8 +36,11 @@ class GASLoop:
         self.generation = 0
         self.use_vlm = use_vlm
         self.vlm_model = vlm_model
+        self._diversity_low = False
 
     def get_temperature(self) -> float:
+        if self._diversity_low:
+            return min(1.3, self.config.temp_start + 0.3)
         if self.generation >= self.config.temp_generations:
             return self.config.temp_end
         t = self.generation / max(1, self.config.temp_generations)
@@ -140,26 +143,45 @@ class GASLoop:
 
         return scores
 
+    def _hamming(self, a: np.ndarray, b: np.ndarray) -> float:
+        return float(np.sum(a != b)) / a.size
+
     def select(
         self,
         pieces: list[np.ndarray],
         scores: list[dict],
         human_picks: list[int] | None = None,
-    ) -> list[np.ndarray]:
-        ranked = sorted(
-            range(len(scores)),
-            key=lambda i: scores[i]["composite"],
-            reverse=True,
-        )
-        top_indices = ranked[: self.config.select_top]
+    ) -> tuple[list[np.ndarray], list[int]]:
+        n_select = self.config.select_top
+        composites = [s["composite"] for s in scores]
+
+        # Greedy max-min diversity selection:
+        # Pick #1 by score, then each next pick maximizes
+        # min hamming distance to already-selected pieces
+        best_idx = int(np.argmax(composites))
+        selected_indices = [best_idx]
+
+        for _ in range(n_select - 1):
+            best_score = -1.0
+            best_i = -1
+            for i in range(len(pieces)):
+                if i in selected_indices:
+                    continue
+                # Min distance to any already-selected piece
+                min_dist = min(self._hamming(pieces[i], pieces[j]) for j in selected_indices)
+                # Blend: 50% composite score + 50% diversity from selected set
+                blended = 0.5 * composites[i] + 0.5 * min_dist
+                if blended > best_score:
+                    best_score = blended
+                    best_i = i
+            if best_i >= 0:
+                selected_indices.append(best_i)
 
         if human_picks:
             valid_picks = [i for i in human_picks if 0 <= i < len(pieces)]
-            merged: list[int] = list(dict.fromkeys(top_indices + valid_picks))
-        else:
-            merged = top_indices
+            selected_indices = list(dict.fromkeys(selected_indices + valid_picks))
 
-        return [pieces[i] for i in merged]
+        return [pieces[i] for i in selected_indices], selected_indices
 
     def finetune(
         self,
@@ -242,18 +264,14 @@ class GASLoop:
 
         scores = self.evaluate(pieces)
 
+        # Check batch diversity — spike temperature next gen if collapsing
+        batch_div = np.mean([s.get("diversity", 0) for s in scores])
+        self._diversity_low = batch_div < self.config.temp_diversity_floor
+
         if self.event_bus:
             self.event_bus.emit("gen_scored", pieces=pieces, scores=scores)
 
-        selected = self.select(pieces, scores, human_picks=human_picks)
-
-        # Determine which original indices were selected for the selections manifest
-        composite = [s["composite"] for s in scores]
-        ranked_indices = sorted(range(len(composite)), key=lambda i: composite[i], reverse=True)
-        selection_indices = ranked_indices[: self.config.select_top]
-        if human_picks:
-            merged_set: list[int] = list(dict.fromkeys(selection_indices + human_picks))
-            selection_indices = merged_set
+        selected, selection_indices = self.select(pieces, scores, human_picks=human_picks)
 
         if self.event_bus:
             self.event_bus.emit("gen_selected", selected=selected, indices=selection_indices)

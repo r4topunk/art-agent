@@ -130,11 +130,12 @@ class GalleryGrid(Widget):
     }
     """
 
-    def __init__(self, cols: int = 4, max_pieces: int = 8, **kwargs):
+    def __init__(self, cols: int = 4, max_pieces: int = 12, **kwargs):
         super().__init__(**kwargs)
         self.cols = cols
         self.max_pieces = max_pieces
         self._pieces: list[tuple[np.ndarray, int, float]] = []
+        self._selected_indices: set[int] = set()
         self._training_previews: list[np.ndarray] = []
         self._training_step: int = 0
         self._training_total: int = 0
@@ -168,6 +169,7 @@ class GalleryGrid(Widget):
         self._is_generating = False
         self._is_scoring = False
         self._has_neural = False
+        self._selected_indices = set()
         indexed = sorted(
             enumerate(scores),
             key=lambda x: x[1].get("composite", 0),
@@ -178,6 +180,10 @@ class GalleryGrid(Widget):
             for idx, _ in indexed
             if idx < len(pieces)
         ]
+        self.refresh()
+
+    def mark_selected(self, indices: list[int]):
+        self._selected_indices = set(indices)
         self.refresh()
 
     def update_training_preview(self, grids: list[np.ndarray], step: int, total_steps: int):
@@ -335,7 +341,7 @@ class GalleryGrid(Widget):
         result.append("\n\n")
 
         if self._gen_grids:
-            result.append(self._render_piece_grid(self._gen_grids[:cols * 2], cols))
+            result.append(self._render_piece_grid(self._gen_grids, cols))
 
         metrics = ["symmetry", "complexity", "structure", "aesthetics", "diversity"]
         result.append("  evaluating: ", style="dim")
@@ -362,7 +368,7 @@ class GalleryGrid(Widget):
         result.append(self._bar(pct))
         result.append("\n\n")
 
-        result.append(self._render_piece_grid(self._gen_grids[:cols * 2], cols))
+        result.append(self._render_piece_grid(self._gen_grids, cols))
 
         return result
 
@@ -385,28 +391,83 @@ class GalleryGrid(Widget):
     def _render_gallery(self) -> Text:
         result = Text()
         cols = self._fit_cols
-        result.append("GALLERY\n", style="bold magenta")
+        has_selection = bool(self._selected_indices)
+        n_selected = len(self._selected_indices)
+        n_total = len(self._pieces)
+
+        if has_selection:
+            result.append("GALLERY", style="bold magenta")
+            result.append(f"  {n_selected}/{n_total} selected\n", style="bold bright_green")
+        else:
+            result.append("GALLERY", style="bold magenta")
+            result.append(f"  {n_total} pieces\n", style="dim cyan")
 
         for row_start in range(0, len(self._pieces), cols):
             row_pieces = self._pieces[row_start : row_start + cols]
+            indices = [idx for _, idx, _ in row_pieces]
+            is_selected = [idx in self._selected_indices for idx in indices]
             piece_rows = [_render_small(g) for g, _, _ in row_pieces]
             scores = [score for _, _, score in row_pieces]
+            art_width = row_pieces[0][0].shape[1] if row_pieces else 16
             n_lines = max((len(r) for r in piece_rows), default=0)
+
+            # Top border for selected pieces
+            if has_selection:
+                result.append(" ")
+                for i, sel in enumerate(is_selected):
+                    if i > 0:
+                        result.append("  ")
+                    if sel:
+                        result.append("+" + "-" * art_width + "+", style="bold bright_yellow")
+                    else:
+                        result.append(" " * (art_width + 2))
+                result.append("\n")
+
             for line_idx in range(n_lines):
                 result.append(" ")
                 for i, lines in enumerate(piece_rows):
                     if i > 0:
                         result.append("  ")
+                    sel = is_selected[i]
+                    if has_selection and sel:
+                        result.append("|", style="bold bright_yellow")
+                    elif has_selection:
+                        result.append(" ")
                     if line_idx < len(lines):
                         result.append(lines[line_idx])
+                    if has_selection and sel:
+                        result.append("|", style="bold bright_yellow")
+                    elif has_selection:
+                        result.append(" ")
                 result.append("\n")
-            # Score row below each piece row
+
+            # Bottom border for selected pieces
+            if has_selection:
+                result.append(" ")
+                for i, sel in enumerate(is_selected):
+                    if i > 0:
+                        result.append("  ")
+                    if sel:
+                        result.append("+" + "-" * art_width + "+", style="bold bright_yellow")
+                    else:
+                        result.append(" " * (art_width + 2))
+                result.append("\n")
+
+            # Score + label row
             result.append(" ")
             for i, score in enumerate(scores):
                 if i > 0:
                     result.append("  ")
-                color = "bright_green" if score >= 0.6 else "yellow" if score >= 0.4 else "red"
-                result.append(f"{score:.3f}".center(16), style=color)
+                sel = is_selected[i]
+                label_width = art_width + (2 if has_selection else 0)
+                if sel:
+                    tag = f"*{score:.3f}*"
+                    result.append(tag.center(label_width), style="bold bright_yellow")
+                else:
+                    color = "bright_green" if score >= 0.6 else "yellow" if score >= 0.4 else "red"
+                    if has_selection:
+                        color = "dim"
+                    result.append(f"{score:.3f}".center(label_width), style=color)
             result.append("\n\n")
 
         return result
