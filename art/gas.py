@@ -84,6 +84,7 @@ class GASLoop:
         tokens, confidences = self.model.generate_with_confidence(
             batch_size=n,
             temperature=temperature,
+            top_p=self.config.top_p,
             device=str(self.device),
             on_token=on_token if bus else None,
         )
@@ -258,13 +259,19 @@ class GASLoop:
         n_select = self.config.select_top
         composites = [s["composite"] for s in scores]
 
+        # When archive exists, reserve 1 slot for an "exploration pick" —
+        # the piece most distant from recent archive history regardless of score.
+        # This prevents the selection pool from converging prematurely.
+        use_exploration = len(self.archive) >= 5
+        n_greedy = n_select - 1 if use_exploration else n_select
+
         # Greedy max-min diversity selection:
         # Pick #1 by score, then each next pick maximizes
         # min hamming distance to already-selected pieces
         best_idx = int(np.argmax(composites))
         selected_indices = [best_idx]
 
-        for _ in range(n_select - 1):
+        for _ in range(n_greedy - 1):
             best_score = -1.0
             best_i = -1
             for i in range(len(pieces)):
@@ -284,24 +291,60 @@ class GASLoop:
             if best_i >= 0:
                 selected_indices.append(best_i)
 
+        # Exploration pick: piece with highest mean distance to recent archive,
+        # subject to a minimum quality gate (composite > 0.15).
+        if use_exploration:
+            recent_archive = self.archive[-20:]
+            best_novel_i = -1
+            best_novelty = -1.0
+            for i in range(len(pieces)):
+                if i in selected_indices:
+                    continue
+                if composites[i] < 0.15:
+                    continue
+                novelty = float(np.mean([self._hamming(pieces[i], p) for p in recent_archive]))
+                if novelty > best_novelty:
+                    best_novelty = novelty
+                    best_novel_i = i
+            if best_novel_i >= 0:
+                selected_indices.append(best_novel_i)
+
         if human_picks:
             valid_picks = [i for i in human_picks if 0 <= i < len(pieces)]
             selected_indices = list(dict.fromkeys(selected_indices + valid_picks))
 
         return [pieces[i] for i in selected_indices], selected_indices
 
+    def _augment_rotations(self, patterns: list[np.ndarray]) -> list[np.ndarray]:
+        """Expand each pattern into 4 rotations (0°, 90°, 180°, 270°)."""
+        augmented = []
+        for p in patterns:
+            for k in range(4):
+                augmented.append(np.rot90(p, k).copy())
+        return augmented
+
+    def _bootstrap_ratio(self) -> float:
+        """Bootstrap mix ratio decays from start to end over decay_generations."""
+        cfg = self.config
+        if self.generation >= cfg.bootstrap_decay_generations:
+            return cfg.bootstrap_mix_ratio_end
+        t = self.generation / max(1, cfg.bootstrap_decay_generations)
+        return cfg.bootstrap_mix_ratio_start + t * (cfg.bootstrap_mix_ratio_end - cfg.bootstrap_mix_ratio_start)
+
     def finetune(
         self,
         selected: list[np.ndarray],
         bootstrap_patterns: list[np.ndarray] | None = None,
     ) -> None:
-        training_patterns = list(selected)
+        # Augment selected pieces with 4 rotations to multiply training signal
+        training_patterns = self._augment_rotations(selected)
 
         if (
             self.generation % self.config.bootstrap_mix_interval == 0
             and bootstrap_patterns
         ):
-            n_bootstrap = max(1, int(len(selected) * self.config.bootstrap_mix_ratio))
+            ratio = self._bootstrap_ratio()
+            n_bootstrap = max(1, int(len(selected) * ratio))
             sampled = random.sample(bootstrap_patterns, min(n_bootstrap, len(bootstrap_patterns)))
             training_patterns = training_patterns + sampled
 

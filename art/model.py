@@ -133,12 +133,14 @@ class PixelGPT(nn.Module):
         batch_size: int,
         temperature: float = 1.0,
         top_k: int = 0,
+        top_p: float = 1.0,
         device: str = "cpu",
     ) -> Tensor:
         tokens, _ = self.generate_with_confidence(
             batch_size=batch_size,
             temperature=temperature,
             top_k=top_k,
+            top_p=top_p,
             device=device,
         )
         return tokens
@@ -149,6 +151,7 @@ class PixelGPT(nn.Module):
         batch_size: int,
         temperature: float = 1.0,
         top_k: int = 0,
+        top_p: float = 1.0,
         device: str = "cpu",
         on_token: Callable[[int, Tensor, Tensor], None] | None = None,
     ) -> tuple[Tensor, Tensor]:
@@ -182,6 +185,7 @@ class PixelGPT(nn.Module):
         blocks = self.blocks
         inv_temp = 1.0 / temperature
         use_top_k = top_k > 0
+        use_top_p = top_p < 1.0
         n_blocks = len(blocks)
 
         # Prime the cache with BOS token
@@ -206,6 +210,15 @@ class PixelGPT(nn.Module):
                 values, _ = torch.topk(logits, top_k)
                 logits.masked_fill_(logits < values[:, -1:], float("-inf"))
             probs = F.softmax(logits, dim=-1)
+            if use_top_p:
+                # Nucleus sampling: keep smallest set of tokens summing to top_p
+                sorted_probs, sorted_idx = torch.sort(probs, dim=-1, descending=True)
+                cumulative = torch.cumsum(sorted_probs, dim=-1)
+                # Remove tokens once cumulative mass exceeds top_p (shifted by 1 to keep at least 1 token)
+                remove = (cumulative - sorted_probs) > top_p
+                sorted_probs[remove] = 0.0
+                probs = torch.zeros_like(probs).scatter_(-1, sorted_idx, sorted_probs)
+                probs = probs / probs.sum(dim=-1, keepdim=True)
             next_token = torch.multinomial(probs, num_samples=1)
             seq[:, t] = next_token.squeeze(-1)
             confidences[:, t] = probs.gather(1, next_token).squeeze(-1)

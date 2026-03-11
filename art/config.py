@@ -56,12 +56,18 @@ class ArtConfig:
     finetune_lr: float = 1e-4
 
     # GAS extras
-    bootstrap_mix_ratio: float = 0.5
+    bootstrap_mix_ratio: float = 0.5          # kept for back-compat; overridden by start/end when decay is active
+    bootstrap_mix_ratio_start: float = 0.6    # bootstrap ratio at generation 0
+    bootstrap_mix_ratio_end: float = 0.15     # bootstrap ratio at bootstrap_decay_generations
+    bootstrap_decay_generations: int = 40     # how many generations to decay over
     bootstrap_mix_interval: int = 1
     temp_start: float = 1.0
     temp_end: float = 0.8
     temp_generations: int = 50
     temp_diversity_floor: float = 0.15  # spike temp when batch diversity drops below this
+
+    # Generation sampling
+    top_p: float = 0.9   # nucleus sampling threshold (1.0 = disabled)
 
     # Vocab — 8 color tokens (0-7) + special tokens
     n_colors: int = 8
