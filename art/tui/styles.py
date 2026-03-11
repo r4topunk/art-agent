@@ -105,4 +105,16 @@ ReviewScreen {
     border: solid #3a3a5c;
     padding: 1;
 }
+
+/* Generation watch screen */
+GenerationScreen {
+    layout: vertical;
+}
+
+#genwatch-panel {
+    height: 1fr;
+    border: solid #3a3a5c;
+    padding: 1;
+    overflow-y: auto;
+}
 """

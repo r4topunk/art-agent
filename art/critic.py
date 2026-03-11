@@ -262,6 +262,7 @@ class ArtCritic:
             'aesthetics': aes,
             'diversity': 0.0,
             'composite': composite,
+            '_gate': gate,
         }
 
     def score_batch(self, grids: list[np.ndarray], on_progress=None) -> list[dict]:
@@ -271,9 +272,11 @@ class ArtCritic:
         for i, grid in enumerate(grids):
             score_dict = self.score_single(grid)
             score_dict['diversity'] = div_scores[i]
+            # Apply the same quality gate to diversity so low-quality images
+            # can't inflate their composite score purely through novelty
             score_dict['composite'] = (
                 score_dict['composite'] +
-                self.weights['diversity'] * div_scores[i]
+                score_dict['_gate'] * self.weights['diversity'] * div_scores[i]
             )
             scores.append(score_dict)
             if on_progress and (i + 1) % 4 == 0:

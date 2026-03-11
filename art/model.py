@@ -19,6 +19,8 @@ class MultiHeadAttention(nn.Module):
         self.k_proj = nn.Linear(config.d_model, config.d_model)
         self.v_proj = nn.Linear(config.d_model, config.d_model)
         self.out_proj = nn.Linear(config.d_model, config.d_model)
+        self.attn_drop = nn.Dropout(config.dropout)
+        self.resid_drop = nn.Dropout(config.dropout)
 
     def forward(self, x: Tensor) -> Tensor:
         B, T, C = x.shape
@@ -26,9 +28,9 @@ class MultiHeadAttention(nn.Module):
         k = self.k_proj(x).view(B, T, self.n_heads, self.d_head).transpose(1, 2)
         v = self.v_proj(x).view(B, T, self.n_heads, self.d_head).transpose(1, 2)
         # Flash Attention: fused causal softmax, faster on MPS/CUDA
-        out = F.scaled_dot_product_attention(q, k, v, is_causal=True)
+        out = F.scaled_dot_product_attention(q, k, v, is_causal=True, dropout_p=self.attn_drop.p if self.training else 0.0)
         out = out.transpose(1, 2).contiguous().view(B, T, C)
-        return self.out_proj(out)
+        return self.resid_drop(self.out_proj(out))
 
     def forward_cached(
         self, x: Tensor, kv_cache: dict | None
@@ -58,9 +60,10 @@ class FeedForward(nn.Module):
         super().__init__()
         self.fc1 = nn.Linear(config.d_model, config.d_ff)
         self.fc2 = nn.Linear(config.d_ff, config.d_model)
+        self.drop = nn.Dropout(config.dropout)
 
     def forward(self, x: Tensor) -> Tensor:
-        return self.fc2(F.gelu(self.fc1(x)))
+        return self.drop(self.fc2(F.gelu(self.fc1(x))))
 
 
 class TransformerBlock(nn.Module):

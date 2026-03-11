@@ -46,11 +46,12 @@ class ArtConfig:
     lr: float = 3e-4
     weight_decay: float = 0.01
     warmup_steps: int = 20
-    train_steps: int = 80
+    train_steps: int = 200
+    dropout: float = 0.1
 
     # GAS
-    images_per_gen: int = 12
-    select_top: int = 3
+    images_per_gen: int = 32
+    select_top: int = 5
     finetune_steps: int = 30
     finetune_lr: float = 1e-4
 

@@ -101,7 +101,10 @@ d_model   = 256   # dimensão dos embeddings
 n_heads   = 8     # attention heads
 n_layers  = 6     # camadas transformer
 d_ff      = 1024  # dimensão da feed-forward layer
+dropout   = 0.1   # dropout em atenção e feed-forward
 ```
+
+Dropout de 0.1 é aplicado na saída da atenção (`resid_drop`) e na saída da feed-forward (`drop`). Isso previne overfitting durante o finetune, onde o modelo treina em apenas 5 peças por 30 steps — sem dropout, ele memorizaria as peças em vez de generalizar padrões.
 
 ---
 
@@ -110,11 +113,11 @@ d_ff      = 1024  # dimensão da feed-forward layer
 GAS é o loop central do sistema. Cada **geração** executa estas etapas em sequência:
 
 ```
-Bootstrap ──▶ Treino Inicial
+Bootstrap ──▶ Treino Inicial (200 steps)
                    │
                    ▼
               ┌─────────┐
-         ┌───▶│ GERAÇÃO │  generate_pieces(12 imagens, temperature T)
+         ┌───▶│ GERAÇÃO │  generate_pieces(32 imagens, temperature T)
          │    └────┬────┘
          │         ▼
          │    ┌─────────┐
@@ -122,7 +125,8 @@ Bootstrap ──▶ Treino Inicial
          │    └────┬────┘
          │         ▼
          │    ┌─────────┐
-         │    │ SELEÇÃO │  3 peças via greedy max-min diversity
+         │    │ SELEÇÃO │  5 peças via greedy max-min diversity
+         │    │         │  + seleções humanas opcionais
          │    └────┬────┘
          │         ▼
          │    ┌──────────┐
@@ -138,9 +142,9 @@ Bootstrap ──▶ Treino Inicial
 ### Parâmetros do GAS
 
 ```python
-images_per_gen    = 12   # peças geradas por geração
-select_top        = 3    # selecionadas via diversified selection
-finetune_steps    = 30   # passos de finetune por geração (reduzido para evitar overfitting)
+images_per_gen    = 32   # peças geradas por geração (mais candidatos = melhor seleção)
+select_top        = 5    # selecionadas via diversified selection
+finetune_steps    = 30   # passos de finetune por geração
 finetune_lr       = 1e-4 # learning rate do finetune
 bootstrap_mix_ratio    = 0.5  # 50% de bootstrap no finetune
 bootstrap_mix_interval = 1    # mistura em toda geração
@@ -148,13 +152,14 @@ bootstrap_mix_interval = 1    # mistura em toda geração
 
 ### Seleção Diversificada (anti-colapso)
 
-A seleção não é mais top-k por score. Usa **greedy max-min diversity**:
+A seleção não é top-k por score. Usa **greedy max-min diversity**:
 
 1. Peça #1: maior composite score
-2. Peça #2: maximiza blend de 50% score + 50% distância mínima de Hamming às já selecionadas
-3. Peça #3: idem
+2. Peças #2–#5: maximiza blend de 50% score + 50% distância mínima de Hamming às já selecionadas
 
-Isso garante que as 3 peças selecionadas sejam tanto boas quanto diferentes entre si, evitando mode collapse.
+Isso garante que as 5 peças selecionadas sejam tanto boas quanto diferentes entre si, evitando mode collapse.
+
+**Seleções Humanas:** Ao pressionar `R` para abrir a tela de Review e marcar favoritos com `Space`, as peças marcadas são adicionadas ao dataset de finetune da próxima geração. O sistema consome as seleções uma vez e reseta — pressione `Enter` na tela de Review para confirmar.
 
 ---
 
@@ -183,7 +188,7 @@ Antes da primeira geração, o sistema precisa de conhecimento mínimo sobre est
 | Grids de pontos | ~80 |
 | Simétricos aleatórios | resto até 5000 |
 
-O modelo é treinado nesses padrões por **80 steps** (treino de bootstrap) antes de começar a evolução. Isso ensina ao PixelGPT conceitos básicos como "pixels adjacentes tendem a ter cores relacionadas".
+O modelo é treinado nesses padrões por **200 steps** (treino de bootstrap) antes de começar a evolução. Isso ensina ao PixelGPT conceitos básicos como "pixels adjacentes tendem a ter cores relacionadas". O aumento de 80 para 200 steps dá ao modelo um prior estrutural mais sólido antes de entrar no loop evolutivo.
 
 Em **toda geração**, 50% dos padrões de bootstrap são misturados ao dataset de finetune para evitar catástrofe de esquecimento (*catastrophic forgetting*) e manter diversidade estrutural.
 
@@ -194,14 +199,22 @@ Em **toda geração**, 50% dos padrões de bootstrap são misturados ao dataset 
 `ArtCritic` avalia cada peça em **5 dimensões** e computa um `composite score`:
 
 ```
-composite = 0.15 × symmetry
-          + 0.25 × complexity
-          + 0.20 × structure
-          + 0.15 × aesthetics
-          + 0.25 × diversity
+composite = gate × (0.10 × symmetry
+                  + 0.30 × complexity
+                  + 0.25 × structure
+                  + 0.20 × aesthetics
+                  + 0.15 × diversity)
 ```
 
-*Se a imagem tiver apenas 1 cor (flat fill), um gate multiplica o composite por 0.3.*
+O **gate** penaliza imagens com poucas cores antes de somar qualquer dimensão, incluindo diversidade:
+
+| Cores únicas | Gate |
+|---|---|
+| 1 (fill sólido) | 0.2 |
+| 2 (quase monocromático) | 0.6 |
+| 3+ | 1.0 |
+
+O gate agora é aplicado **também à dimensão diversity**, impedindo que imagens de baixa qualidade inflacionem seu score composite simplesmente por serem únicas no batch.
 
 ### Dimensão 1: Symmetry (peso 0.15)
 
@@ -321,13 +334,14 @@ Se a diversidade média do batch cair abaixo de 0.15 (distância de Hamming), a 
 
 ## 9. O que a TUI Mostra
 
-A TUI é construída com Textual e tem duas telas: **Dashboard** (padrão) e **Review** (tecla `R`).
+A TUI é construída com Textual e tem três telas: **Dashboard** (padrão), **Generation Watch** (tecla `G`) e **Review** (tecla `R`).
 
 ### Navegação
 
 | Tecla | Ação |
 |---|---|
 | `D` | Volta ao Dashboard |
+| `G` | Abre tela de Generation Watch |
 | `R` | Abre tela de Review |
 | `Q` | Encerra o programa |
 
@@ -364,9 +378,9 @@ TRAINING
 
 - Fase do treino (bootstrap ou finetune), progresso em steps, barra de progresso, loss atual, learning rate e sparkline da curva de loss.
 
-#### Gallery Grid (centro superior, todas as 12 peças)
+#### Gallery Grid (centro superior, todas as 32 peças)
 
-Durante a geração mostra as peças sendo **desenhadas em tempo real** — a cada 16 pixels gerados, a galeria atualiza com o estado parcial de todas as peças. Após a avaliação, exibe todas as 12 peças com seu score composite abaixo de cada uma. As 3 peças selecionadas são destacadas com **borda amarela** e score marcado com `*`.
+Durante a geração mostra as peças sendo **desenhadas em tempo real** — a cada 16 pixels gerados, a galeria atualiza com o estado parcial de todas as peças. Após a avaliação, exibe todas as 32 peças com seu score composite abaixo de cada uma. As 5 peças selecionadas são destacadas com **borda amarela** e score marcado com `*`.
 
 #### Evolution Panel (canto superior direito)
 
@@ -382,7 +396,7 @@ Max Score Trend
   Max   0.631
   Min   0.201
   Temp  0.860
-  Sel   3/12
+  Sel   5/32
 
 SCORE BREAKDOWN (avg)
 ──────────────────────────
@@ -420,9 +434,29 @@ Linha do tempo horizontal mostrando a **melhor peça de cada geração passada**
 
 ---
 
+### Generation Watch Screen (tecla `G`)
+
+Tela dedicada a observar todas as **32 imagens sendo geradas simultaneamente**, pixel a pixel. Ideal para acompanhar como o modelo preenche cada imagem durante a fase de geração.
+
+**Fases exibidas:**
+
+| Fase | O que é mostrado |
+|---|---|
+| `generating` | Barra de progresso por linha (row 0–16) + todas as 32 imagens em tempo real |
+| `scoring` | Barra de progresso da avaliação pelo crítico |
+| `scored` | Grid completo com scores e destaque (★) das 5 peças selecionadas |
+
+A tela atualiza a cada 16 pixels gerados (uma linha por vez). Navegação:
+
+| Tecla | Ação |
+|---|---|
+| `D` ou `ESC` | Volta ao Dashboard |
+
+---
+
 ### Review Screen (tecla `R`)
 
-Acessível após a primeira geração ser concluída. Exibe todas as 12 peças da geração atual em uma grade de 8 colunas.
+Acessível após a primeira geração ser concluída. Exibe todas as 32 peças da geração atual em uma grade.
 
 | Tecla | Ação |
 |---|---|
@@ -441,7 +475,7 @@ Acessível após a primeira geração ser concluída. Exibe todas as 12 peças d
 ### Status Bar (rodapé, largura total)
 
 ```
- Gen 7 — Drawing... 62%  │  [D]ash [R]eview [Q]uit
+ Gen 7 — Drawing... 62%  │  [D]ash [G]en Watch [R]eview [Q]uit
 ```
 
 Atualiza em tempo real com a fase atual e atalhos de teclado disponíveis.
@@ -457,11 +491,11 @@ Cada geração cria o diretório `data/collections/gen_NNN/` com:
 ```
 gen_007/
 ├── pieces/
-│   ├── piece_0000.png   # todas as 12 peças geradas
+│   ├── piece_0000.png   # todas as 32 peças geradas
 │   ├── piece_0001.png
 │   └── ...
 ├── scores.json          # scores de cada peça (todas as dimensões)
-├── selections.json      # índices das 3 peças selecionadas
+├── selections.json      # índices das 5 peças selecionadas
 └── checkpoint.pt        # estado do modelo após o finetune
 ```
 
@@ -514,7 +548,7 @@ Scores: #3 (0.631), #17 (0.598), #1 (0.571), #24 (0.554), ...
 |---|---|
 | **GAS** | Genetic Art Selection — o loop evolutivo principal |
 | **Bootstrap** | Dataset inicial de 5000 padrões geométricos programáticos |
-| **Finetune** | Retreino rápido (30 steps) nas melhores peças da geração, com regularização de entropia |
+| **Finetune** | Retreino rápido (30 steps) nas 5 melhores peças da geração, com regularização de entropia e dropout |
 | **Generation** | Uma iteração completa do loop GAS (gerar → avaliar → selecionar → finetune) |
 | **Temperature** | Parâmetro de aleatoriedade do sampling; alto = diverso, baixo = conservador |
 | **Composite score** | Score final ponderado que combina as 5 dimensões do crítico |
@@ -536,3 +570,7 @@ Scores: #3 (0.631), #17 (0.598), #1 (0.571), #24 (0.554), ...
 | **Entropy regularization** | Termo na loss que penaliza predições muito confiantes, mantendo diversidade nas gerações |
 | **Reactive temperature** | Mecanismo que aumenta a temperatura automaticamente quando a diversidade do batch cai abaixo de um limiar |
 | **Per-image diversity** | Score de novidade individual: distância média de Hamming de uma peça para todas as outras do batch |
+| **Dropout** | Regularização que desativa aleatoriamente 10% dos neurônios durante o treino, prevenindo memorização das peças selecionadas |
+| **Quality gate** | Multiplicador (0.2/0.6/1.0) aplicado a todas as dimensões do score, incluindo diversidade, quando a imagem tem poucas cores |
+| **Human picks** | Seleções manuais do usuário na tela de Review; adicionadas ao dataset de finetune da próxima geração |
+| **Generation Watch** | Tela TUI dedicada a observar as 32 imagens sendo geradas em tempo real, pixel a pixel |

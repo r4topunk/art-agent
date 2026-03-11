@@ -154,17 +154,28 @@ class OvernightRunner:
         # Atomic replace
         os.replace(tmp_path, log_path)
 
-    def run(self, generations: int, auto_only: bool = True):
-        """Run the evolutionary loop for N generations."""
+    def run(self, generations: int, human_picks_fn=None):
+        """Run the evolutionary loop for N generations.
+
+        Args:
+            generations: Number of generations to run.
+            human_picks_fn: Optional callable returning list[int] of human-selected
+                piece indices for the next generation. Returns None or [] for auto-only.
+        """
         print(f"Starting evolutionary run for {generations} generations")
 
         for gen_idx in range(generations):
             print(f"\n--- Generation {self.gas.generation} ---")
 
+            # Get human picks if available
+            human_picks = None
+            if human_picks_fn is not None:
+                human_picks = human_picks_fn() or None
+
             # Run generation
             summary = self.gas.run_generation(
                 bootstrap_patterns=self.bootstrap_patterns,
-                human_picks=[] if auto_only else None
+                human_picks=human_picks,
             )
 
             # Append to evolution log

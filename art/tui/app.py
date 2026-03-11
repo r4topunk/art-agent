@@ -19,6 +19,7 @@ from art.tui.widgets.birth import BirthWidget
 from art.tui.widgets.heartbeat import HeartbeatWidget
 from art.tui.widgets.timeline import TimelineWidget
 from art.tui.widgets.review import ReviewGrid, DetailPanel
+from art.tui.widgets.genwatch import GenWatchPanel
 from art.tui.widgets.log import SystemLog
 from art.tui import audio
 
@@ -36,7 +37,7 @@ class StatusBar(Static):
     def __init__(self):
         super().__init__("")
         self._status = "Initializing..."
-        self._keys = "[D]ash [R]eview [Q]uit"
+        self._keys = "[D]ash [G]en Watch [R]eview [Q]uit"
 
     def update_status(self, text: str):
         self._status = text
@@ -52,7 +53,7 @@ class DashboardScreen(Screen):
         with Vertical(id="main-grid"):
             with Horizontal(id="top-row"):
                 yield TrainingPanel(id="training-panel")
-                yield GalleryGrid(cols=4, max_pieces=12, id="gallery-panel")
+                yield GalleryGrid(cols=4, max_pieces=32, id="gallery-panel")
                 yield EvolutionPanel(id="evolution-panel")
             with Horizontal(id="bottom-row"):
                 yield HeartbeatWidget(id="heartbeat")
@@ -131,11 +132,34 @@ class ReviewScreen(Screen):
             d.update_detail(grid, idx, scores, idx in g._favorites)
 
 
+class GenerationScreen(Screen):
+    """Full-screen view to watch all images being generated live."""
+    BINDINGS = [
+        ("escape", "app.pop_screen", "Back"),
+        ("d", "app.pop_screen", "Dashboard"),
+    ]
+
+    def compose(self) -> ComposeResult:
+        yield GenWatchPanel(id="genwatch-panel")
+
+    def on_mount(self):
+        # Sync current state from app
+        app = self.app
+        panel = self.query_one("#genwatch-panel", GenWatchPanel)
+        if hasattr(app, "_current_gen"):
+            panel._generation = app._current_gen
+        if app._latest_pieces:
+            panel.update_scored(app._latest_pieces, app._latest_scores)
+            if app._latest_selected_indices:
+                panel.update_selected(app._latest_selected_indices)
+
+
 class ArtApp(App):
     CSS = APP_CSS
     TITLE = "ArtAgent"
     BINDINGS = [
         ("d", "switch_dashboard", "Dashboard"),
+        ("g", "switch_genwatch", "Gen Watch"),
         ("r", "switch_review", "Review"),
         ("q", "quit", "Quit"),
     ]
@@ -317,6 +341,7 @@ class ArtApp(App):
             self._log("SCORE", "critic", f"analyzing {n_pieces} pieces — symmetry, complexity, structure, aesthetics")
         except Exception:
             pass
+        self._genwatch_call("update_scoring", 0, n_pieces)
 
     def _on_scoring_progress(self, done: int, total: int, latest_composite: float):
         self.call_from_thread(self._u_scoring_progress, done, total, latest_composite)
@@ -330,6 +355,7 @@ class ArtApp(App):
             self._log("SCORE", "critic", f"scored {done}/{total} ({pct:.0f}%) — latest={latest_composite:.3f}")
         except Exception:
             pass
+        self._genwatch_call("update_scoring", done, total)
 
     def _on_finetune_start(self, n_selected: int, generation: int):
         self.call_from_thread(self._u_finetune_start, n_selected, generation)
@@ -506,6 +532,7 @@ class ArtApp(App):
             self._log("GEN", "gas", f"generation {generation} started — temp={temperature:.3f}")
         except Exception:
             pass
+        self._genwatch_call("update_gen_start", generation, temperature)
 
     def _on_gen_progress(self, grids: list, pixel: int, total_pixels: int):
         self.call_from_thread(self._u_gen_progress, grids, pixel, total_pixels)
@@ -524,6 +551,7 @@ class ArtApp(App):
             self._log("GEN", "draw", f"row {row}/16 ({pct:.0f}%) — {len(grids)} pieces live")
         except Exception:
             pass
+        self._genwatch_call("update_progress", grids, pixel, total_pixels)
 
     def _on_gen_confidences(self, confidences):
         self.call_from_thread(self._u_gen_confidences, confidences)
@@ -538,6 +566,7 @@ class ArtApp(App):
         self._latest_pieces = pieces
         self._latest_scores = scores
         self.call_from_thread(self._u_gen_scored, pieces, scores)
+        self.call_from_thread(self._genwatch_call, "update_scored", pieces, scores)
 
     def _u_gen_scored(self, pieces: list, scores: list):
         try:
@@ -578,6 +607,7 @@ class ArtApp(App):
     def _on_gen_selected(self, selected: list, indices: list[int]):
         self._latest_selected_indices = indices
         self.call_from_thread(self._u_gen_selected, indices)
+        self.call_from_thread(self._genwatch_call, "update_selected", indices)
 
     def _u_gen_selected(self, indices: list[int]):
         try:
@@ -633,6 +663,21 @@ class ArtApp(App):
 
     # --- Worker ---
 
+    def _genwatch_call(self, method: str, *args):
+        """Forward event to GenWatchPanel if the GenerationScreen is active."""
+        try:
+            if isinstance(self.screen, GenerationScreen):
+                panel = self.screen.query_one("#genwatch-panel", GenWatchPanel)
+                getattr(panel, method)(*args)
+        except Exception:
+            pass
+
+    def _consume_human_picks(self) -> list[int] | None:
+        """Called by the runner each generation to collect human picks."""
+        picks = self._human_picks
+        self._human_picks = None
+        return picks
+
     @work(thread=True)
     def _run_evolution(self):
         runner = OvernightRunner(
@@ -646,7 +691,7 @@ class ArtApp(App):
                 runner.initialize()
         else:
             runner.initialize()
-        runner.run(self.generations)
+        runner.run(self.generations, human_picks_fn=self._consume_human_picks)
 
     # --- Actions ---
 
@@ -654,10 +699,20 @@ class ArtApp(App):
         if not isinstance(self.screen, DashboardScreen):
             self.pop_screen()
 
+    def action_switch_genwatch(self):
+        if isinstance(self.screen, GenerationScreen):
+            return
+        if not isinstance(self.screen, DashboardScreen):
+            self.pop_screen()
+        self.push_screen(GenerationScreen())
+
     def action_switch_review(self):
-        if self._latest_pieces and self._latest_scores:
-            self.push_screen(ReviewScreen())
-            self.call_later(self._load_review)
+        if not self._latest_pieces or not self._latest_scores:
+            return
+        if not isinstance(self.screen, DashboardScreen):
+            self.pop_screen()
+        self.push_screen(ReviewScreen())
+        self.call_later(self._load_review)
 
     def _load_review(self):
         try:
