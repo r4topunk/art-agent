@@ -17,24 +17,37 @@ def complexity_score(grid: np.ndarray, n_colors: int = 8) -> float:
     """Measure visual complexity: color diversity, edges, entropy, transition variety."""
     size = grid.shape[0]
 
-    # Color usage: sweet spot is 4-7 colors
-    unique = len(np.unique(grid))
-    if unique <= 1:
+    # Color balance: entropy of color distribution rewards both variety AND balance.
+    # A 2-color image gets at most 0.25 regardless of how balanced it is.
+    # A 5-color image where one dominates 80% scores lower than a balanced 4-color one.
+    counts_c = np.bincount(grid.flatten(), minlength=n_colors)
+    n_unique = int(np.sum(counts_c > 0))
+    if n_unique <= 1:
         color_score = 0.0
-    elif unique <= 2:
-        color_score = 0.2
-    elif unique == 3:
-        color_score = 0.5
-    elif unique <= 7:
-        color_score = 1.0  # 4-7 colors = richest visual range
     else:
-        color_score = 0.75  # all 8 can get chaotic but still okay
+        probs_c = counts_c / counts_c.sum()
+        probs_nz = probs_c[probs_c > 0]
+        h = float(-np.sum(probs_nz * np.log2(probs_nz)))
+        color_score = h / np.log2(n_colors)  # 0..1, max when all 8 colors balanced
+        if n_unique == 2:
+            color_score = min(color_score, 0.25)  # hard cap: 2-color is boring
 
-    # Edge count: transitions between different colors
+    # Edge density: sweet spot is 30-65% (enough variation without pure checkerboard noise).
+    # Penalises near-maximum edge density which indicates pixel-level alternation.
     h_edges = np.sum(grid[:, :-1] != grid[:, 1:])
     v_edges = np.sum(grid[:-1, :] != grid[1:, :])
     max_edges = 2 * size * (size - 1)
-    edge_score = float((h_edges + v_edges) / max_edges)
+    edge_density = float((h_edges + v_edges) / max_edges)
+    if edge_density < 0.10:
+        edge_score = edge_density * 3.0
+    elif edge_density < 0.30:
+        edge_score = 0.30 + (edge_density - 0.10) / 0.20 * 0.50
+    elif edge_density <= 0.65:
+        edge_score = 1.0
+    elif edge_density <= 0.85:
+        edge_score = 1.0 - (edge_density - 0.65) / 0.20 * 0.60
+    else:
+        edge_score = 0.20  # pure checkerboard territory
 
     # Block entropy: Shannon entropy of color distribution in 4x4 blocks
     block_size = max(1, size // 4)
@@ -174,29 +187,32 @@ def aesthetics_score(grid: np.ndarray, n_colors: int = 8) -> float:
     balance = 1.0 - float(np.mean(np.std(freq_arr, axis=0)))
     balance_score = float(np.clip(balance, 0, 1))
 
-    # Border framing: contrast between border and interior
+    # Border framing: continuous L1 distance between border and interior color distributions.
+    # Binary dominant-color comparison was trivially gamed by noise patterns.
     border = np.concatenate([
         grid[0, :], grid[-1, :],
         grid[1:-1, 0], grid[1:-1, -1]
     ])
     interior = grid[1:-1, 1:-1].flatten()
-    # Compare dominant colors
-    border_dom = np.argmax(np.bincount(border, minlength=n_colors)[:n_colors])
-    interior_dom = np.argmax(np.bincount(interior, minlength=n_colors)[:n_colors])
-    framing_score = 1.0 if border_dom != interior_dom else 0.3
+    border_freq = np.bincount(border, minlength=n_colors)[:n_colors].astype(float)
+    border_freq /= border_freq.sum() + 1e-8
+    interior_freq = np.bincount(interior, minlength=n_colors)[:n_colors].astype(float)
+    interior_freq /= interior_freq.sum() + 1e-8
+    # L1 / 2 gives 0..1 (0 = identical distributions, 1 = completely different)
+    framing_score = float(np.sum(np.abs(border_freq - interior_freq)) / 2.0)
 
-    # Color harmony: reward rich palettes, penalize sparse (flat) ones
-    unique = len(np.unique(grid))
-    if unique <= 1:
+    # Color harmony: entropy-based, consistent with complexity color_score.
+    counts_h = np.bincount(grid.flatten(), minlength=n_colors)
+    n_uniq_h = int(np.sum(counts_h > 0))
+    if n_uniq_h <= 1:
         harmony = 0.0
-    elif unique <= 2:
-        harmony = 0.2  # nearly monochrome = boring
-    elif unique == 3:
-        harmony = 0.5
-    elif unique <= 6:
-        harmony = 1.0  # 4-6 colors = visual richness sweet spot
     else:
-        harmony = 0.8  # all 7-8 colors still good
+        probs_h = counts_h / counts_h.sum()
+        probs_nz_h = probs_h[probs_h > 0]
+        h_ent = float(-np.sum(probs_nz_h * np.log2(probs_nz_h)))
+        harmony = h_ent / np.log2(n_colors)
+        if n_uniq_h == 2:
+            harmony = min(harmony, 0.25)
 
     return float(np.mean([balance_score, framing_score, harmony]))
 
@@ -222,8 +238,8 @@ class ArtCritic:
         self.config = config
         if weights is None:
             self.weights = {
-                'symmetry': 0.10,
-                'complexity': 0.30,
+                'symmetry': 0.15,
+                'complexity': 0.25,
                 'structure': 0.25,
                 'aesthetics': 0.20,
                 'diversity': 0.15,

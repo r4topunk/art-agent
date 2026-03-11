@@ -133,6 +133,7 @@ class OvernightRunner:
                     grid = tokenizer.decode_to_grid(tokens)
                     archive.append(grid)
         self.gas.archive = archive
+        self.gas.archive_fingerprints = [self.gas._color_fingerprint(p) for p in archive]
         if archive:
             print(f"Loaded {len(archive)} archived pieces for repetition penalty")
 
@@ -229,5 +230,8 @@ class OvernightRunner:
                   f"mean_score={mean_score:.4f}, "
                   f"max_score={max_score:.4f}, "
                   f"temperature={temperature:.4f}")
+
+        # Wait for the last background save to finish before declaring done
+        self.gas.wait_for_save()
 
         print(f"\nEvolution complete. {generations} generations processed.")
