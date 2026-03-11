@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import copy
 import json
 import random
+from concurrent.futures import Future, ThreadPoolExecutor
 from pathlib import Path
 
 import numpy as np
@@ -39,6 +41,11 @@ class GASLoop:
         self._diversity_low = False
         # Archive of past selected pieces for repetition penalty
         self.archive: list[np.ndarray] = []
+        # Style fingerprints (top-2 dominant color indices) of archived pieces
+        self.archive_fingerprints: list[frozenset] = []
+        # Background save thread pool (single worker to serialize saves)
+        self._save_pool = ThreadPoolExecutor(max_workers=1)
+        self._save_future: Future | None = None
 
     def get_temperature(self) -> float:
         if self._diversity_low:
@@ -160,6 +167,19 @@ class GASLoop:
                 else:
                     scores[i]["repetition_penalty"] = 0.0
 
+        # Style-level penalty: penalize pieces whose top-2 color style is
+        # over-represented in the archive. This catches cases where the model
+        # keeps regenerating the same color scheme (e.g. always yellow+orange)
+        # even when pixel-level Hamming distances are sufficient to avoid the
+        # repetition penalty above.
+        if self.archive_fingerprints:
+            for i, piece in enumerate(pieces):
+                fp = self._color_fingerprint(piece)
+                matches = sum(1 for afp in self.archive_fingerprints if afp == fp)
+                if matches > 4:
+                    style_penalty = min(0.40, (matches - 4) * 0.05)
+                    scores[i]["composite"] *= (1.0 - style_penalty)
+
         if self.use_vlm:
             try:
                 from art.vlm_critic import score_batch_with_vlm
@@ -199,6 +219,12 @@ class GASLoop:
                 print(f"[GAS] VLM scoring failed: {e}")
 
         return scores
+
+    def _color_fingerprint(self, grid: np.ndarray) -> frozenset:
+        """Top-2 dominant color indices as an order-independent style fingerprint."""
+        counts = np.bincount(grid.flatten(), minlength=self.config.n_colors)
+        top2 = np.argsort(counts)[-2:]
+        return frozenset(top2.tolist())
 
     def _hamming(self, a: np.ndarray, b: np.ndarray) -> float:
         return float(np.sum(a != b)) / a.size
@@ -286,14 +312,18 @@ class GASLoop:
             lr=self.config.finetune_lr,
         )
 
-    def save_generation(
+    def _save_generation_sync(
         self,
         gen_dir: Path,
         pieces: list[np.ndarray],
         scores: list[dict],
         selections: list[int],
+        generation: int,
+        checkpoint_data: dict,
     ) -> None:
+        """I/O-heavy save that runs in a background thread."""
         from art.config import PALETTE_16
+        import PIL.Image
 
         pieces_dir = gen_dir / "pieces"
         pieces_dir.mkdir(parents=True, exist_ok=True)
@@ -305,20 +335,45 @@ class GASLoop:
         best_local_idx = int(np.argmax([s["composite"] for s in selected_scores]))
         best_global_idx = selections[best_local_idx]
 
-        for rank, idx in enumerate(selections):
-            piece = pieces[idx]
+        # Convert all pieces to PIL images (for grid) and selected ones to disk
+        all_pil = []
+        best_pil = None
+        for idx, piece in enumerate(pieces):
             h, w = piece.shape
             rgb = np.zeros((h, w, 3), dtype=np.uint8)
             for ci in range(self.config.n_colors):
                 mask = piece == ci
                 rgb[mask] = PALETTE_16[ci]
-            img = __import__("PIL").Image.fromarray(rgb, mode="RGB")
-            img.save(pieces_dir / f"piece_{idx:04d}.png")
+            img = PIL.Image.fromarray(rgb, mode="RGB")
+            all_pil.append(img)
+            if idx == best_global_idx:
+                best_pil = img
+
+        for rank, idx in enumerate(selections):
+            all_pil[idx].save(pieces_dir / f"piece_{idx:04d}.png")
 
             # Also save the generation's best piece upscaled to 1024x1024
             if idx == best_global_idx:
-                img_upscaled = img.resize((1024, 1024), __import__("PIL").Image.NEAREST)
+                img_upscaled = all_pil[idx].resize((1024, 1024), PIL.Image.NEAREST)
                 img_upscaled.save(gen_dir / "best.png")
+
+        # Save 6x6 grid of all generated pieces (no margins) to shared grids folder
+        cell = 1024 // 6  # ~170px per cell, exact 1024x1024 output
+        grid_img = PIL.Image.new("RGB", (1024, 1024), color=(0, 0, 0))
+        for i, img in enumerate(all_pil[:36]):
+            row, col = divmod(i, 6)
+            x, y = col * cell, row * cell
+            grid_img.paste(img.resize((cell, cell), PIL.Image.NEAREST), (x, y))
+        grids_dir = self.config.collections_dir / "grids"
+        grids_dir.mkdir(parents=True, exist_ok=True)
+        grid_img.save(grids_dir / f"gen_{generation:03d}_grid.png")
+
+        # Save best piece to hall_of_fame folder
+        hall_dir = self.config.collections_dir / "hall_of_fame"
+        hall_dir.mkdir(parents=True, exist_ok=True)
+        if best_pil is not None:
+            best_hof = best_pil.resize((1024, 1024), PIL.Image.NEAREST)
+            best_hof.save(hall_dir / f"gen_{generation:03d}_best.png")
 
         if self.event_bus:
             self.event_bus.emit("saving_piece", done=len(selections), total=len(selections))
@@ -334,13 +389,45 @@ class GASLoop:
             json.dump({"best_index": best_global_idx, "score": selected_scores[best_local_idx]}, f, indent=2)
 
         checkpoint_path = gen_dir / "checkpoint.pt"
-        self.trainer.save_checkpoint(
-            checkpoint_path,
-            extra={
+        torch.save(checkpoint_data, checkpoint_path)
+
+    def save_generation(
+        self,
+        gen_dir: Path,
+        pieces: list[np.ndarray],
+        scores: list[dict],
+        selections: list[int],
+    ) -> None:
+        """Snapshot model state and submit save to background thread."""
+        # Snapshot checkpoint data now, before the model gets mutated by next finetune
+        checkpoint_data = {
+            "model_state_dict": copy.deepcopy(self.model.state_dict()),
+            "optimizer_state_dict": copy.deepcopy(self.trainer.optimizer.state_dict()),
+            "extra": {
                 "generation": self.generation,
                 "temperature": self.get_temperature(),
             },
+        }
+
+        # Wait for any previous save to finish before submitting a new one
+        if self._save_future is not None:
+            self._save_future.result()
+
+        self._save_future = self._save_pool.submit(
+            self._save_generation_sync,
+            gen_dir,
+            pieces,
+            scores,
+            selections,
+            self.generation,
+            checkpoint_data,
         )
+
+    def wait_for_save(self) -> None:
+        """Block until the background save completes. Call before exit."""
+        if self._save_future is not None:
+            self._save_future.result()
+            self._save_future = None
 
     def run_generation(
         self,
@@ -386,6 +473,7 @@ class GASLoop:
 
         # Add selected pieces to archive for future repetition penalty
         self.archive.extend(selected)
+        self.archive_fingerprints.extend(self._color_fingerprint(p) for p in selected)
 
         composites = [s["composite"] for s in scores]
         # Find the best piece index among selections

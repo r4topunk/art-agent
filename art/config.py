@@ -50,7 +50,7 @@ class ArtConfig:
     dropout: float = 0.1
 
     # GAS
-    images_per_gen: int = 32
+    images_per_gen: int = 36
     select_top: int = 5
     finetune_steps: int = 30
     finetune_lr: float = 1e-4
