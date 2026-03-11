@@ -98,7 +98,7 @@ class EvolutionPanel(Widget):
             result.append("SCORE BREAKDOWN (avg)\n", style="bold")
             result.append("─" * 26 + "\n", style="dim")
 
-            keys = ["symmetry", "complexity", "aesthetics", "diversity"]
+            keys = ["symmetry", "complexity", "structure", "aesthetics", "diversity"]
             for key in keys:
                 vals = [s.get(key, 0) for s in self._latest_scores]
                 avg = sum(vals) / len(vals) if vals else 0

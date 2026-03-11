@@ -18,7 +18,13 @@ from art.utils import setup_device
 
 
 class OvernightRunner:
-    def __init__(self, config: ArtConfig, event_bus: EventBus | None = None):
+    def __init__(
+        self,
+        config: ArtConfig,
+        event_bus: EventBus | None = None,
+        use_vlm: bool = False,
+        vlm_model: str = "moondream",
+    ):
         """Initialize the OvernightRunner with config, device, model, and GASLoop."""
         self.config = config
         self.event_bus = event_bus
@@ -29,7 +35,12 @@ class OvernightRunner:
         self.model = self.model.to(self.device)
 
         # Create GASLoop
-        self.gas = GASLoop(self.model, config, self.device, event_bus=event_bus)
+        self.gas = GASLoop(
+            self.model, config, self.device,
+            event_bus=event_bus,
+            use_vlm=use_vlm,
+            vlm_model=vlm_model,
+        )
 
         # Initialize evolution log and bootstrap patterns
         self.evolution_log: list[dict] = []

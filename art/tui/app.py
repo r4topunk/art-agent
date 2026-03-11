@@ -125,10 +125,18 @@ class ArtApp(App):
         ("q", "quit", "Quit"),
     ]
 
-    def __init__(self, generations: int = 50, resume: bool = True):
+    def __init__(
+        self,
+        generations: int = 50,
+        resume: bool = True,
+        use_vlm: bool = False,
+        vlm_model: str = "moondream",
+    ):
         super().__init__()
         self.generations = generations
         self.do_resume = resume
+        self.use_vlm = use_vlm
+        self.vlm_model = vlm_model
         self.event_bus = EventBus()
         self.config = ArtConfig()
         ensure_dirs(self.config)
@@ -302,7 +310,12 @@ class ArtApp(App):
 
     @work(thread=True)
     def _run_evolution(self):
-        runner = OvernightRunner(self.config, event_bus=self.event_bus)
+        runner = OvernightRunner(
+            self.config,
+            event_bus=self.event_bus,
+            use_vlm=self.use_vlm,
+            vlm_model=self.vlm_model,
+        )
         if self.do_resume:
             if not runner.resume():
                 runner.initialize()

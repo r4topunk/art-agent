@@ -23,6 +23,8 @@ class GASLoop:
         config: ArtConfig,
         device: torch.device,
         event_bus: EventBus | None = None,
+        use_vlm: bool = False,
+        vlm_model: str = "moondream",
     ) -> None:
         self.model = model
         self.config = config
@@ -32,6 +34,8 @@ class GASLoop:
         self.critic = ArtCritic(config)
         self.tokenizer = PixelTokenizer(config)
         self.generation = 0
+        self.use_vlm = use_vlm
+        self.vlm_model = vlm_model
 
     def get_temperature(self) -> float:
         if self.generation >= self.config.temp_generations:
@@ -64,7 +68,27 @@ class GASLoop:
         return pieces
 
     def evaluate(self, pieces: list[np.ndarray]) -> list[dict]:
-        return self.critic.score_batch(pieces)
+        scores = self.critic.score_batch(pieces)
+
+        if self.use_vlm:
+            try:
+                from art.vlm_critic import score_batch_with_vlm
+                vlm_scores = score_batch_with_vlm(pieces, model=self.vlm_model)
+                for i, vlm in enumerate(vlm_scores):
+                    if vlm is not None:
+                        scores[i]["vlm_interest"] = vlm["interest"]
+                        scores[i]["vlm_composition"] = vlm["composition"]
+                        scores[i]["vlm_creativity"] = vlm["creativity"]
+                        scores[i]["vlm_composite"] = vlm["vlm_composite"]
+                        # Blend: 50% algorithmic + 50% VLM
+                        scores[i]["composite"] = (
+                            0.5 * scores[i]["composite"]
+                            + 0.5 * vlm["vlm_composite"]
+                        )
+            except Exception as e:
+                print(f"[GAS] VLM scoring failed: {e}")
+
+        return scores
 
     def select(
         self,

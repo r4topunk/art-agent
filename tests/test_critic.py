@@ -6,6 +6,7 @@ from art.critic import (
     ArtCritic,
     aesthetics_score,
     complexity_score,
+    structure_score,
     diversity_bonus,
     symmetry_score,
 )
@@ -104,7 +105,7 @@ def test_aesthetics_balanced():
 def test_score_single_keys(critic):
     grid = np.zeros((16, 16), dtype=float)
     result = critic.score_single(grid)
-    expected_keys = {"symmetry", "complexity", "aesthetics", "diversity", "composite"}
+    expected_keys = {"symmetry", "complexity", "structure", "aesthetics", "diversity", "composite"}
     assert set(result.keys()) == expected_keys, (
         f"Missing keys: {expected_keys - set(result.keys())}"
     )
