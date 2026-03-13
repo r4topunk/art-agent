@@ -233,6 +233,13 @@ def per_image_diversity(grids: list[np.ndarray]) -> list[float]:
     return scores
 
 
+def _stripe_fraction(grid: np.ndarray) -> float:
+    """Fraction of rows/columns that are uniform (all same color)."""
+    rows_uniform = sum(1 for r in range(grid.shape[0]) if len(np.unique(grid[r, :])) == 1)
+    cols_uniform = sum(1 for c in range(grid.shape[1]) if len(np.unique(grid[:, c])) == 1)
+    return max(rows_uniform, cols_uniform) / grid.shape[0]
+
+
 class ArtCritic:
     def __init__(
         self,
@@ -268,8 +275,10 @@ class ArtCritic:
         # Steeper curve (3.0×) ensures 50% dominant → gate 0.55, 65%+ → floor.
         _, counts = np.unique(grid, return_counts=True)
         dominance = float(counts.max()) / grid.size  # 0..1
-        if dominance > 0.35:
-            gate *= max(0.1, 1.0 - 3.0 * (dominance - 0.35))
+        if dominance > 0.60:
+            gate *= 0.05
+        elif dominance > 0.30:
+            gate *= max(0.1, 1.0 - 5.0 * (dominance - 0.30))
 
         # Large-region gate: if any contiguous same-color region covers >20%
         # of the grid, multiply gate down.  structure_score also penalises
@@ -293,8 +302,13 @@ class ArtCritic:
                             stack.extend([(r2 + 1, c2), (r2 - 1, c2), (r2, c2 + 1), (r2, c2 - 1)])
                     max_region = max(max_region, count)
         max_region_frac = max_region / grid.size
-        if max_region_frac > 0.20:
-            gate *= max(0.1, 1.0 - 2.5 * (max_region_frac - 0.20))
+        if max_region_frac > 0.15:
+            gate *= max(0.1, 1.0 - 4.0 * (max_region_frac - 0.15))
+
+        # Stripe penalty: penalize grids with many uniform rows/columns
+        stripe_frac = _stripe_fraction(grid)
+        if stripe_frac > 0.40:
+            gate *= max(0.1, 1.0 - 3.0 * (stripe_frac - 0.40))
 
         sym = symmetry_score(grid)
         cplx = complexity_score(grid, n_colors)
