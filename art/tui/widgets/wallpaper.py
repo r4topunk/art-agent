@@ -30,21 +30,24 @@ class WallpaperWidget(Widget):
         self._generation: int = 0
         self._finetune_step: int = 0
         self._finetune_total: int = 0
-        self._all_pieces: list[np.ndarray] = []  # all individual scored pieces across gens
+        self._selected_pieces: list[np.ndarray] = []  # pieces selected for finetuning
         self._cycle_index: int = 0
-        self._cycle_size: int = 3  # pieces to show at once while cycling
+        self._display_mode: str = "wallpaper"  # "wallpaper" or "grid"
 
     def on_mount(self):
         self.set_interval(0.33, self._cycle_next_piece)
 
     def _cycle_next_piece(self):
-        """During finetuning, flash through individual pieces (groups of 3) on the mural."""
-        if self._phase != "finetuning" or not self._all_pieces:
+        """During finetuning, flash through selected pieces one at a time."""
+        if self._phase != "finetuning" or not self._selected_pieces:
             return
-        n = len(self._all_pieces)
-        self._cycle_index = (self._cycle_index + self._cycle_size) % max(1, n)
-        i = self._cycle_index
-        self._grids = self._all_pieces[i:i + self._cycle_size] or self._all_pieces[:self._cycle_size]
+        n = len(self._selected_pieces)
+        self._cycle_index = (self._cycle_index + 1) % max(1, n)
+        self._grids = [self._selected_pieces[self._cycle_index]]
+        self.refresh()
+
+    def toggle_display_mode(self):
+        self._display_mode = "grid" if self._display_mode == "wallpaper" else "wallpaper"
         self.refresh()
 
     # ------------------------------------------------------------------ events from app
@@ -52,15 +55,13 @@ class WallpaperWidget(Widget):
     def update_gen_start(self, generation: int, temperature: float):
         self._generation = generation
         if generation == 0:
-            # Hide gen 0 — keep waiting state, nothing to show yet
             return
-        # Keep previous grids visible until new pixels arrive
         self._phase = "generating"
         self.refresh()
 
     def update_progress(self, grids: list[np.ndarray], pixel: int, total_pixels: int):
         if self._generation == 0:
-            return  # Don't show gen 0 live pixels
+            return
         self._grids = grids
         self._phase = "generating"
         self.refresh()
@@ -72,13 +73,13 @@ class WallpaperWidget(Widget):
     def update_scored(self, pieces: list[np.ndarray], scores: list[dict]):
         self._grids = pieces
         self._phase = "scored"
-        # Accumulate individual pieces for finetuning slideshow
-        if pieces and (not self._all_pieces or self._all_pieces[-1] is not pieces[-1]):
-            self._all_pieces.extend(pieces)
         self.refresh()
 
     def update_selected(self, indices: list[int]):
         self.refresh()
+
+    def update_selected_pieces(self, pieces: list[np.ndarray]):
+        self._selected_pieces = pieces
 
     def update_finetune(self, step: int, total: int):
         self._phase = "finetuning"
@@ -102,13 +103,15 @@ class WallpaperWidget(Widget):
             result.append(" " * left + msg, style="dim italic")
             return result
 
-        # Tile enough pieces to cover the full terminal, including partial edges
-        # w terminal cols = w pixel cols; h terminal lines = h*2 pixel rows
-        pieces_x = max(1, (w + 15) // 16)   # ceil division — includes partial right column
-        pieces_y = max(1, (h * 2 + 15) // 16)  # ceil — includes partial bottom row
+        if self._display_mode == "grid":
+            return self._render_grid(w, h)
+        return self._render_wallpaper(w, h)
+
+    def _render_wallpaper(self, w: int, h: int) -> Text:
+        pieces_x = max(1, (w + 15) // 16)
+        pieces_y = max(1, (h * 2 + 15) // 16)
         n = len(self._grids)
 
-        # Build oversized mural pixel buffer, then crop to exact terminal size
         mural_pw = pieces_x * 16
         mural_ph = pieces_y * 16
         mural = np.zeros((mural_ph, mural_pw), dtype=np.int32)
@@ -122,15 +125,16 @@ class WallpaperWidget(Widget):
                 rr, cc = min(pr, 16), min(pc, 16)
                 mural[r0:r0 + rr, c0:c0 + cc] = piece[:rr, :cc]
 
-        # Status overlay for the bottom row
+        mode_hint = "[F]Grid" if self._display_mode == "wallpaper" else "[F]Full"
         status = ""
         if self._phase == "finetuning":
             pct = self._finetune_step / max(1, self._finetune_total) * 100
-            status = f" gen {self._generation}  finetuning {pct:.0f}% "
+            status = f" gen {self._generation}  finetuning {pct:.0f}%  {mode_hint} "
         elif self._phase == "scoring":
-            status = f" gen {self._generation}  scoring... "
+            status = f" gen {self._generation}  scoring...  {mode_hint} "
+        else:
+            status = f" {mode_hint} "
 
-        # Render exactly w cols × h lines (crop partial pieces at right/bottom)
         result = Text()
         for tr in range(h):
             py0 = tr * 2
@@ -148,4 +152,51 @@ class WallpaperWidget(Widget):
             if tr < h - 1:
                 result.append("\n")
 
+        return result
+
+    def _render_grid(self, w: int, h: int) -> Text:
+        pieces = self._grids[:36]
+        n = len(pieces)
+        if n == 0:
+            return Text("  no pieces  [F]Full", style="dim italic")
+
+        cols = 6
+        rows = min(6, (n + cols - 1) // cols)
+        cell_w = max(4, (w - cols - 1) // cols)
+        cell_h = max(4, (h * 2 - rows - 1) // rows)
+        cell_w = min(cell_w, 16)
+        cell_h = min(cell_h, 16)
+
+        grid_w = cols * (cell_w + 1) + 1
+        grid_h = rows * (cell_h + 1) + 1
+        left_pad = max(0, (w - grid_w) // 2)
+        top_pad = max(0, (h - (grid_h + 1) // 2) // 2)
+
+        result = Text()
+        result.append("\n" * top_pad)
+
+        for row in range(rows):
+            result.append(" " * left_pad + "─" * grid_w + "\n", style="dim")
+            term_lines = cell_h // 2
+            for tl in range(term_lines):
+                result.append(" " * left_pad)
+                result.append("│", style="dim")
+                for col in range(cols):
+                    idx = row * cols + col
+                    if idx < n:
+                        piece = pieces[idx]
+                        py0 = tl * 2
+                        py1 = py0 + 1
+                        for tc in range(cell_w):
+                            px_col = tc * 16 // cell_w
+                            top_px = int(piece[py0 * 16 // cell_h, px_col]) if py0 < cell_h else 0
+                            bot_px = int(piece[py1 * 16 // cell_h, px_col]) if py1 < cell_h else 0
+                            result.append(UPPER_HALF, style=f"{PALETTE_TERM[top_px]} on {PALETTE_TERM[bot_px]}")
+                    else:
+                        result.append(" " * cell_w)
+                    result.append("│", style="dim")
+                if tl < term_lines - 1 or row < rows - 1:
+                    result.append("\n")
+
+        result.append("\n" + " " * left_pad + "─" * grid_w, style="dim")
         return result
