@@ -59,7 +59,7 @@ class ArtConfig:
     bootstrap_mix_ratio: float = 0.5          # kept for back-compat; overridden by start/end when decay is active
     bootstrap_mix_ratio_start: float = 0.6    # bootstrap ratio at generation 0
     bootstrap_mix_ratio_end: float = 0.15     # bootstrap ratio at bootstrap_decay_generations
-    bootstrap_decay_generations: int = 40     # how many generations to decay over
+    bootstrap_decay_generations: int = 100    # how many generations to decay over
     bootstrap_mix_interval: int = 1
     temp_start: float = 1.0
     temp_end: float = 0.8

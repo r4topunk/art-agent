@@ -51,9 +51,14 @@ class GASLoop:
         if self._diversity_low:
             return min(1.3, self.config.temp_start + 0.3)
         if self.generation >= self.config.temp_generations:
-            return self.config.temp_end
-        t = self.generation / max(1, self.config.temp_generations)
-        return self.config.temp_start + t * (self.config.temp_end - self.config.temp_start)
+            base = self.config.temp_end
+        else:
+            t = self.generation / max(1, self.config.temp_generations)
+            base = self.config.temp_start + t * (self.config.temp_end - self.config.temp_start)
+        # Periodic spike every 50 gens to escape local optima
+        if self.generation > 0 and self.generation % 50 == 0:
+            base = max(base, 1.3)
+        return base
 
     def generate_pieces(self, n: int | None = None) -> list[np.ndarray]:
         if n is None:
@@ -161,10 +166,10 @@ class GASLoop:
                 # Take the worse of the two similarities
                 max_sim = max(max_pixel_sim, max_struct_sim)
                 # Penalty ramps up: 0 when similarity < 0.7, full at 1.0
-                if max_sim > 0.7:
-                    penalty = (max_sim - 0.7) / 0.3  # 0..1
+                if max_sim > 0.5:
+                    penalty = (max_sim - 0.5) / 0.5  # 0..1
                     scores[i]["repetition_penalty"] = penalty
-                    scores[i]["composite"] *= (1.0 - 0.5 * penalty)
+                    scores[i]["composite"] *= (1.0 - 0.6 * penalty)
                 else:
                     scores[i]["repetition_penalty"] = 0.0
 
