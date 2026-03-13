@@ -8,18 +8,23 @@
 @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500&family=Playfair+Display:ital,wght@1,400&display=swap');
 
 :root {
-  --bg: #0f0f1a;
-  --surface: rgba(255,255,255,0.02);
-  --border: rgba(255,255,255,0.06);
-  --text: rgba(255,255,255,0.5);
-  --text-dim: rgba(255,255,255,0.25);
-  --text-bright: rgba(255,255,255,0.8);
-  --accent: #6c5ce7;
-  --green: #00e436;
-  --cyan: #29adff;
+  --bg:       #06060e;
+  --bg2:      #0a0a18;
+  --neon:     #39ff14;
+  --neon2:    rgba(57,255,20,0.12);
+  --neon3:    rgba(57,255,20,0.06);
+  --cyan:     #00e5ff;
+  --pink:     #ff2d78;
+  --amber:    #ffb300;
+  --border:   rgba(57,255,20,0.15);
+  --border2:  rgba(57,255,20,0.07);
+  --text:     rgba(57,255,20,0.55);
+  --text-dim: rgba(57,255,20,0.28);
+  --text-hi:  rgba(57,255,20,0.9);
+  --glow:     0 0 8px rgba(57,255,20,0.4);
 }
 
-* { margin: 0; padding: 0; box-sizing: border-box; }
+* { margin:0; padding:0; box-sizing:border-box; }
 
 body {
   background: var(--bg);
@@ -32,353 +37,366 @@ body {
   width: 100vw;
 }
 
-#layout {
-  display: grid;
-  grid-template-columns: 320px 1fr;
-  grid-template-rows: 1fr 80px;
-  height: 100vh;
+/* ── TAB BAR ── */
+#tab-bar {
+  position: fixed; top:0; left:0; right:0; z-index:100;
+  height: 34px;
+  display: flex; align-items: center;
+  padding: 0 16px; gap: 2px;
+  background: rgba(6,6,14,0.97);
+  border-bottom: 1px solid var(--border2);
 }
+.tab {
+  padding: 5px 14px;
+  font-size: 10px; letter-spacing: 2px; text-transform: uppercase;
+  color: var(--text-dim); cursor: pointer;
+  background: none; border: 1px solid transparent;
+  font-family: 'JetBrains Mono', monospace;
+  transition: color 0.2s, border-color 0.2s;
+}
+.tab:hover { color: var(--text); }
+.tab.active {
+  color: var(--neon); border-color: var(--border);
+  background: var(--neon3);
+  text-shadow: var(--glow);
+}
+#tab-right { margin-left: auto; display:flex; align-items:center; gap:10px; }
 
-/* === LEFT: NEURAL SPINE === */
-#spine-col {
-  grid-row: 1;
-  grid-column: 1;
-  padding: 24px 20px 16px;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  border-right: 1px solid var(--border);
-}
-
-#spine-title {
-  font-family: 'Playfair Display', serif;
-  font-style: italic;
-  font-size: 13px;
-  color: var(--text-dim);
-  letter-spacing: 3px;
-  margin-bottom: 16px;
-}
-
-#spine-scroll {
-  flex: 1;
-  overflow-y: auto;
-  overflow-x: hidden;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-#spine-scroll::-webkit-scrollbar { width: 0; }
-
-.layer-wrap {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.layer-heatmap {
-  flex-shrink: 0;
-}
-.layer-heatmap canvas {
-  display: block;
-  width: 240px;
-  height: 60px;
-  image-rendering: pixelated;
-  border: 1px solid var(--border);
-  background: #0a0a14;
-}
-.layer-meta {
-  font-size: 9px;
-  color: var(--text-dim);
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 40px;
-}
-.layer-name { color: var(--text); }
-
-/* Connections between layers — thin lines */
-.layer-connector {
-  width: 240px;
-  height: 6px;
-  position: relative;
-  margin-left: 0;
-}
-.layer-connector::before {
-  content: '';
-  position: absolute;
-  left: 40px; right: 40px;
-  top: 50%;
-  height: 1px;
-  background: var(--border);
-}
-.layer-connector .particle-track {
-  position: absolute;
-  width: 3px;
-  height: 3px;
-  border-radius: 50%;
-  background: var(--accent);
-  opacity: 0;
-  animation: drift-down 2s linear infinite;
-  top: 0;
-}
-@keyframes drift-down {
-  0% { top: 0; opacity: 0; }
-  20% { opacity: 0.5; }
-  80% { opacity: 0.5; }
-  100% { top: 100%; opacity: 0; }
-}
-
-/* Embed sim */
-#embed-section {
-  margin-top: 12px;
-  flex-shrink: 0;
-}
-#embed-label {
-  font-size: 9px;
-  letter-spacing: 2px;
-  color: var(--text-dim);
-  text-transform: uppercase;
-  margin-bottom: 6px;
-}
-#embed-canvas {
-  display: block;
-  width: 128px;
-  height: 128px;
-  image-rendering: pixelated;
-  border: 1px solid var(--border);
-}
-
-/* === RIGHT PANEL === */
-#right-col {
-  grid-row: 1;
-  grid-column: 2;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 24px 32px 12px;
-  gap: 20px;
-  overflow-y: auto;
-}
-#right-col::-webkit-scrollbar { width: 2px; }
-#right-col::-webkit-scrollbar-thumb { background: var(--border); }
-
-/* Phase */
-#phase-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
+/* phase in tab bar */
+#phase-row { display:flex; align-items:center; gap:7px; }
 #phase-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--accent);
-  box-shadow: 0 0 8px var(--accent);
+  width:6px; height:6px; border-radius:50%;
+  background: var(--neon); box-shadow: var(--glow);
   animation: pdot 2s ease-in-out infinite;
 }
-@keyframes pdot {
-  0%,100% { opacity: 0.4; }
-  50% { opacity: 1; }
-}
+@keyframes pdot { 0%,100%{opacity:.3} 50%{opacity:1} }
 #phase-text {
   font-family: 'Playfair Display', serif;
-  font-style: italic;
-  font-size: 14px;
-  color: var(--text-dim);
-  letter-spacing: 2px;
+  font-style: italic; font-size: 12px;
+  color: var(--text-dim); letter-spacing: 2px;
 }
 
-/* Specimen */
-#specimen-label {
-  font-size: 9px;
-  letter-spacing: 3px;
-  text-transform: uppercase;
-  color: var(--text-dim);
+/* conn */
+#conn { font-size:9px; display:flex; align-items:center; gap:5px; letter-spacing:1px; }
+#conn-dot { width:5px; height:5px; border-radius:50%; }
+#conn.connected #conn-dot { background:var(--neon); box-shadow:var(--glow); }
+#conn.connected span { color: var(--text-dim); }
+#conn.disconnected #conn-dot { background:#ff2222; }
+#conn.disconnected span { color: rgba(255,34,34,0.4); }
+
+/* ── PAGES ── */
+#pages { position:fixed; inset:34px 0 0; }
+.page { display:none; width:100%; height:100%; }
+.page.active { display:flex; }
+
+/* ═══════════════════════════════════════════
+   PAGE: NEURAL
+═══════════════════════════════════════════ */
+#page-main {
+  display: none;
+  grid-template-columns: 300px 300px 1fr;
+  grid-template-rows: 1fr 72px;
+}
+#page-main.active { display: grid; }
+
+/* ── Column 1: Spine ── */
+#spine-col {
+  grid-row:1; grid-column:1;
+  padding: 16px 14px 12px;
+  display: flex; flex-direction: column;
+  overflow: hidden;
+  border-right: 1px solid var(--border2);
+}
+#spine-title {
+  font-family: 'Playfair Display', serif;
+  font-style: italic; font-size: 12px;
+  color: var(--text-dim); letter-spacing: 3px;
+  margin-bottom: 10px;
+}
+#spine-scroll {
+  flex:1; overflow-y:auto; overflow-x:hidden;
+  display:flex; flex-direction:column; gap:3px;
+}
+#spine-scroll::-webkit-scrollbar { width:0; }
+.layer-wrap { display:flex; align-items:center; gap:7px; }
+.layer-heatmap canvas {
+  display:block; width:220px; height:54px;
+  image-rendering:pixelated;
+  border: 1px solid var(--border2);
+  background: #030308;
+}
+.layer-meta { font-size:9px; color:var(--text-dim); display:flex; flex-direction:column; gap:1px; min-width:36px; }
+.layer-name { color:var(--text); }
+.layer-connector { width:220px; height:7px; position:relative; }
+.layer-connector::before {
+  content:''; position:absolute; left:24px; right:24px;
+  top:50%; height:1px; background: var(--border2);
+}
+.particle-track {
+  position:absolute; width:3px; height:3px; border-radius:50%;
+  background:var(--neon); opacity:0;
+  animation: drift-down 1.8s linear infinite; top:0;
+}
+@keyframes drift-down {
+  0%{top:0;opacity:0} 25%{opacity:.7} 75%{opacity:.7} 100%{top:100%;opacity:0}
+}
+#embed-section { margin-top:10px; flex-shrink:0; }
+#embed-label {
+  font-size:8px; letter-spacing:2px; color:var(--text-dim);
+  text-transform:uppercase; margin-bottom:5px;
+}
+#embed-canvas { display:block; width:112px; height:112px; image-rendering:pixelated; border:1px solid var(--border2); }
+
+/* ── Column 2: Specimen ── */
+#specimen-col {
+  grid-row:1; grid-column:2;
+  padding: 16px 14px 12px;
+  display: flex; flex-direction: column; align-items: center;
+  gap: 10px;
+  border-right: 1px solid var(--border2);
+  overflow: hidden;
+}
+.section-label {
+  font-size: 9px; letter-spacing: 3px; text-transform: uppercase;
+  color: var(--text-dim); align-self: flex-start;
 }
 #best-wrap {
-  position: relative;
+  position:relative;
   border: 1px solid var(--border);
-  padding: 6px;
-  background: var(--surface);
+  padding: 5px;
+  background: var(--neon3);
+  box-shadow: 0 0 20px rgba(57,255,20,0.04);
+  transition: box-shadow 0.5s;
+}
+#best-wrap::before {
+  content:''; position:absolute; inset:0;
+  border:1px solid transparent;
+  background: linear-gradient(135deg, rgba(57,255,20,0.08), transparent 50%) border-box;
+  -webkit-mask: linear-gradient(#fff 0 0) padding-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor; mask-composite: exclude;
+  pointer-events:none;
 }
 #best-piece {
-  width: 256px;
-  height: 256px;
-  image-rendering: pixelated;
-  background: #000;
-  display: block;
+  width: 256px; height: 256px;
+  image-rendering:pixelated; background:#000; display:block;
 }
 #confidence-overlay {
-  position: absolute;
-  top: 6px; left: 6px;
-  width: 256px;
-  height: 256px;
-  image-rendering: pixelated;
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 0.3s;
-  mix-blend-mode: screen;
+  position:absolute; top:5px; left:5px; width:256px; height:256px;
+  image-rendering:pixelated; opacity:0; pointer-events:none;
+  transition:opacity 0.3s; mix-blend-mode:screen;
 }
-#best-wrap:hover #confidence-overlay { opacity: 0.45; }
+#best-wrap:hover #confidence-overlay { opacity:.45; }
+#best-meta { display:flex; flex-direction:column; gap:4px; align-self:flex-start; font-size:10px; }
+#best-meta .row { display:flex; gap:6px; }
+#best-meta .lbl { color:var(--text-dim); }
+#best-meta .val { color:var(--neon); text-shadow:var(--glow); font-weight:400; }
 
-#best-meta {
-  display: flex;
-  gap: 24px;
-  font-size: 10px;
-  color: var(--text-dim);
-}
-#best-meta .val { color: var(--text-bright); }
-
-.flash { animation: flashglow 0.8s ease-out; }
-@keyframes flashglow {
-  0% { box-shadow: 0 0 30px rgba(108,92,231,0.4); }
-  100% { box-shadow: none; }
+.flash { animation: nflash 0.9s ease-out; }
+@keyframes nflash {
+  0%  { box-shadow: 0 0 30px rgba(57,255,20,0.5), 0 0 60px rgba(57,255,20,0.2); }
+  100%{ box-shadow: 0 0 20px rgba(57,255,20,0.04); }
 }
 
-/* Gallery */
-#gallery-label {
-  font-size: 9px;
-  letter-spacing: 3px;
-  text-transform: uppercase;
-  color: var(--text-dim);
+/* ── Column 3: Colony ── */
+#colony-col {
+  grid-row:1; grid-column:3;
+  padding: 16px 20px 12px;
+  display: flex; flex-direction: column;
+  gap: 12px; overflow-y:auto;
 }
+#colony-col::-webkit-scrollbar { width:2px; }
+#colony-col::-webkit-scrollbar-thumb { background:var(--border2); }
 #gallery {
-  display: grid;
-  grid-template-columns: repeat(6, 48px);
-  grid-template-rows: repeat(6, 48px);
-  gap: 3px;
+  display:grid;
+  grid-template-columns: repeat(6,1fr);
+  gap:3px;
 }
 #gallery canvas {
-  width: 48px;
-  height: 48px;
-  image-rendering: pixelated;
-  background: #000;
-  border: 1px solid rgba(255,255,255,0.03);
-  transition: border-color 0.3s, box-shadow 0.3s;
+  width:100%; aspect-ratio:1;
+  image-rendering:pixelated; background:#000;
+  border:1px solid rgba(57,255,20,0.05);
+  transition: border-color .3s, box-shadow .3s;
+  display:block;
 }
+#gallery canvas:hover { border-color: rgba(57,255,20,0.2); }
 #gallery canvas.selected {
-  border-color: var(--green);
-  box-shadow: 0 0 8px rgba(0,228,54,0.2);
+  border-color: var(--neon);
+  box-shadow: 0 0 8px rgba(57,255,20,0.3);
 }
 
-/* === BOTTOM BAR === */
-#bottom-bar {
-  grid-row: 2;
-  grid-column: 1 / -1;
-  display: flex;
-  align-items: center;
-  border-top: 1px solid var(--border);
-  background: rgba(15,15,26,0.9);
+/* ── Bottom Bar ── */
+#main-bottom {
+  grid-row:2; grid-column:1/-1;
+  display:flex; align-items:center;
+  border-top:1px solid var(--border2);
+  background: rgba(6,6,14,0.97);
 }
-.chart-cell {
-  flex: 1;
-  padding: 10px 20px;
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-}
-.chart-title {
-  font-size: 9px;
-  letter-spacing: 2px;
-  color: var(--text-dim);
-  text-transform: uppercase;
-}
-.chart-cell svg { width: 100%; height: 36px; }
-.sparkline { fill: none; stroke-width: 1.2; stroke-linecap: round; stroke-linejoin: round; }
-.sl-loss { stroke: var(--cyan); }
-.sl-grad { stroke: var(--green); }
-.sl-glow { stroke-width: 3; opacity: 0.15; }
+.chart-cell { flex:1; padding:8px 18px; display:flex; flex-direction:column; gap:3px; }
+.chart-cell + .chart-cell { border-left:1px solid var(--border2); }
+.chart-title { font-size:8px; letter-spacing:2px; color:var(--text-dim); text-transform:uppercase; }
+.chart-cell svg { width:100%; height:36px; }
+.sparkline { fill:none; stroke-width:1.2; stroke-linecap:round; stroke-linejoin:round; }
+.sl-loss { stroke:var(--cyan); }
+.sl-grad { stroke:var(--neon); }
+.sl-glow { stroke-width:3; opacity:.15; }
 
 #stats-cell {
-  min-width: 170px;
-  padding: 10px 20px;
-  display: grid;
-  grid-template-columns: auto auto;
-  gap: 1px 14px;
-  align-content: center;
-  border-left: 1px solid var(--border);
+  min-width:160px; padding:8px 18px;
+  display:grid; grid-template-columns:auto auto; gap:1px 12px; align-content:center;
+  border-left:1px solid var(--border2);
 }
-#stats-cell .label { font-size: 9px; color: var(--text-dim); text-align: right; letter-spacing: 1px; text-transform: uppercase; }
-#stats-cell .value { font-size: 11px; color: var(--text-bright); font-variant-numeric: tabular-nums; }
+#stats-cell .label { font-size:8px; color:var(--text-dim); text-align:right; letter-spacing:1px; text-transform:uppercase; }
+#stats-cell .value { font-size:11px; color:var(--neon); text-shadow:var(--glow); font-variant-numeric:tabular-nums; }
 
-/* Connection indicator */
-#conn {
-  position: fixed;
-  bottom: 90px;
-  right: 16px;
-  z-index: 10;
-  font-size: 9px;
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  letter-spacing: 1px;
+/* ═══════════════════════════════════════════
+   PAGE: MURAL
+═══════════════════════════════════════════ */
+#page-mural { display:none; flex-direction:column; }
+#page-mural.active { display:flex; }
+
+#mural-toolbar {
+  display:flex; align-items:center; gap:14px;
+  padding:7px 18px; flex-shrink:0;
+  border-bottom:1px solid var(--border2);
+  background:rgba(6,6,14,0.97);
 }
-#conn-dot { width: 5px; height: 5px; border-radius: 50%; }
-#conn.connected #conn-dot { background: var(--green); box-shadow: 0 0 6px var(--green); }
-#conn.connected span { color: var(--text-dim); }
-#conn.disconnected #conn-dot { background: #ff2222; }
-#conn.disconnected span { color: rgba(255,34,34,0.4); }
+#mural-toolbar .tool-label {
+  font-size:8px; letter-spacing:2px; text-transform:uppercase; color:var(--text-dim);
+}
+.zoom-btn {
+  width:24px; height:24px; border:1px solid var(--border); background:var(--neon3);
+  color:var(--neon); font-size:15px; cursor:pointer;
+  display:flex; align-items:center; justify-content:center;
+  font-family:'JetBrains Mono',monospace;
+  transition:box-shadow .2s;
+}
+.zoom-btn:hover { box-shadow:var(--glow); }
+#zoom-val { font-size:10px; color:var(--text); min-width:36px; text-align:center; font-variant-numeric:tabular-nums; }
+#mural-mode-btn {
+  padding:4px 12px; border:1px solid var(--border); background:var(--neon3);
+  color:var(--text-dim); font-size:8px; letter-spacing:2px; text-transform:uppercase;
+  cursor:pointer; font-family:'JetBrains Mono',monospace; transition:color .2s,box-shadow .2s;
+}
+#mural-mode-btn:hover { color:var(--neon); }
+#mural-mode-btn.kaleido { color:var(--neon); border-color:var(--neon); box-shadow:var(--glow); }
+#mural-gen-info { font-size:9px; color:var(--text-dim); letter-spacing:1px; }
+#mural-phase {
+  font-family:'Playfair Display',serif; font-style:italic;
+  font-size:11px; color:var(--text-dim); margin-left:auto;
+}
+
+#mural-canvas-wrap {
+  flex:1; overflow:hidden; position:relative;
+  cursor:crosshair; background:#030308;
+}
+#mural-canvas { position:absolute; top:0; left:0; image-rendering:pixelated; }
+#mural-overlay {
+  position:absolute; bottom:14px; left:50%; transform:translateX(-50%);
+  font-size:10px; color:var(--text-dim); letter-spacing:1px;
+  pointer-events:none; white-space:nowrap;
+}
 </style>
 </head>
 <body>
 
-<div id="conn" class="disconnected"><div id="conn-dot"></div><span id="conn-text">Disconnected</span></div>
-
-<div id="layout">
-
-<!-- LEFT: SPINE -->
-<div id="spine-col">
-  <div id="spine-title">neural spine</div>
-  <div id="spine-scroll"></div>
-  <div id="embed-section">
-    <div id="embed-label">color embedding</div>
-    <canvas id="embed-canvas" width="8" height="8"></canvas>
+<!-- TAB BAR -->
+<div id="tab-bar">
+  <button class="tab active" onclick="switchTab('main')">Neural</button>
+  <button class="tab" onclick="switchTab('mural')">Mural</button>
+  <div id="tab-right">
+    <div id="phase-row">
+      <div id="phase-dot"></div>
+      <div id="phase-text">waiting</div>
+    </div>
+    <div id="conn" class="disconnected">
+      <div id="conn-dot"></div><span id="conn-text">Disconnected</span>
+    </div>
   </div>
 </div>
 
-<!-- RIGHT -->
-<div id="right-col">
-  <div id="phase-row"><div id="phase-dot"></div><div id="phase-text">generating</div></div>
-  <div id="specimen-label">SPECIMEN</div>
-  <div id="best-wrap">
-    <canvas id="best-piece" width="16" height="16"></canvas>
-    <canvas id="confidence-overlay" width="16" height="16"></canvas>
-  </div>
-  <div id="best-meta">
-    <span>score <span class="val" id="meta-score">—</span></span>
-    <span>gen <span class="val" id="meta-gen">—</span></span>
-    <span>temp <span class="val" id="meta-temp">—</span></span>
-  </div>
-  <div id="gallery-label">COLONY</div>
-  <div id="gallery"></div>
-</div>
+<div id="pages">
 
-<!-- BOTTOM -->
-<div id="bottom-bar">
-  <div class="chart-cell">
-    <div class="chart-title">Loss</div>
-    <svg id="loss-chart" viewBox="0 0 200 36" preserveAspectRatio="none">
-      <polyline class="sparkline sl-loss sl-glow" points=""/>
-      <polyline class="sparkline sl-loss" points=""/>
-    </svg>
-  </div>
-  <div class="chart-cell">
-    <div class="chart-title">Gradient</div>
-    <svg id="grad-chart" viewBox="0 0 200 36" preserveAspectRatio="none">
-      <polyline class="sparkline sl-grad sl-glow" points=""/>
-      <polyline class="sparkline sl-grad" points=""/>
-    </svg>
-  </div>
-  <div id="stats-cell">
-    <div class="label">Gen</div><div class="value" id="stat-gen">—</div>
-    <div class="label">Temp</div><div class="value" id="stat-temp">—</div>
-    <div class="label">Loss</div><div class="value" id="stat-loss">—</div>
-    <div class="label">Phase</div><div class="value" id="stat-phase">—</div>
-  </div>
-</div>
+  <!-- PAGE: NEURAL -->
+  <div id="page-main" class="page active">
 
-</div>
+    <!-- Col 1: spine -->
+    <div id="spine-col">
+      <div id="spine-title">neural spine</div>
+      <div id="spine-scroll"></div>
+      <div id="embed-section">
+        <div id="embed-label">color embedding</div>
+        <canvas id="embed-canvas" width="8" height="8"></canvas>
+      </div>
+    </div>
+
+    <!-- Col 2: specimen -->
+    <div id="specimen-col">
+      <div class="section-label">Specimen</div>
+      <div id="best-wrap">
+        <canvas id="best-piece" width="16" height="16"></canvas>
+        <canvas id="confidence-overlay" width="16" height="16"></canvas>
+      </div>
+      <div id="best-meta">
+        <div class="row"><span class="lbl">score</span><span class="val" id="meta-score">—</span></div>
+        <div class="row"><span class="lbl">gen</span><span class="val" id="meta-gen">—</span><span class="lbl" style="margin-left:8px">temp</span><span class="val" id="meta-temp">—</span></div>
+      </div>
+    </div>
+
+    <!-- Col 3: colony -->
+    <div id="colony-col">
+      <div class="section-label">Colony</div>
+      <div id="gallery"></div>
+    </div>
+
+    <!-- Bottom bar -->
+    <div id="main-bottom">
+      <div class="chart-cell">
+        <div class="chart-title">Loss</div>
+        <svg id="loss-chart" viewBox="0 0 200 36" preserveAspectRatio="none">
+          <polyline class="sparkline sl-loss sl-glow" points=""/>
+          <polyline class="sparkline sl-loss" points=""/>
+        </svg>
+      </div>
+      <div class="chart-cell">
+        <div class="chart-title">Gradient</div>
+        <svg id="grad-chart" viewBox="0 0 200 36" preserveAspectRatio="none">
+          <polyline class="sparkline sl-grad sl-glow" points=""/>
+          <polyline class="sparkline sl-grad" points=""/>
+        </svg>
+      </div>
+      <div id="stats-cell">
+        <div class="label">Gen</div><div class="value" id="stat-gen">—</div>
+        <div class="label">Temp</div><div class="value" id="stat-temp">—</div>
+        <div class="label">Loss</div><div class="value" id="stat-loss">—</div>
+        <div class="label">Phase</div><div class="value" id="stat-phase">—</div>
+      </div>
+    </div>
+
+  </div><!-- /page-main -->
+
+  <!-- PAGE: MURAL -->
+  <div id="page-mural" class="page">
+    <div id="mural-toolbar">
+      <span class="tool-label">Tile</span>
+      <button class="zoom-btn" onclick="muralZoom(-1)">−</button>
+      <span id="zoom-val">16px</span>
+      <button class="zoom-btn" onclick="muralZoom(+1)">+</button>
+      <button id="mural-mode-btn" onclick="toggleMuralMode()">Wallpaper</button>
+      <span id="mural-gen-info"></span>
+      <span id="mural-phase"></span>
+    </div>
+    <div id="mural-canvas-wrap">
+      <canvas id="mural-canvas"></canvas>
+      <div id="mural-overlay">no pieces yet</div>
+    </div>
+  </div>
+
+</div><!-- /pages -->
 
 <script>
+// ─────────────────────────────────────────
+// CONSTANTS
+// ─────────────────────────────────────────
 const PALETTE = [
   [0,0,0],[255,241,232],[255,0,77],[255,163,0],
   [255,236,39],[0,228,54],[41,173,255],[255,119,168],
@@ -389,10 +407,28 @@ const HEAT = [
 ];
 const N_LAYERS = 6;
 
+// ─────────────────────────────────────────
+// STATE
+// ─────────────────────────────────────────
 let lossHistory = [], gradHistory = [];
-let currentGradNorm = 0.5;
+let allPieces = [], selectedPieces = [];
+let muralTileSize = 16, muralMode = 'wallpaper';
+let kaleidoInterval = null;
 
-// ── Build spine: 6 layer heatmap canvases with connectors ──
+// ─────────────────────────────────────────
+// TABS
+// ─────────────────────────────────────────
+function switchTab(name) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelector(`.tab[onclick="switchTab('${name}')"]`).classList.add('active');
+  document.getElementById(`page-${name}`).classList.add('active');
+  if (name === 'mural') renderMural();
+}
+
+// ─────────────────────────────────────────
+// BUILD SPINE
+// ─────────────────────────────────────────
 const spineScroll = document.getElementById('spine-scroll');
 const layerCanvases = [];
 const layerNames = ['input','L1','L2','L3','L4','output'];
@@ -400,40 +436,36 @@ const layerNames = ['input','L1','L2','L3','L4','output'];
 for (let i = 0; i < N_LAYERS; i++) {
   const wrap = document.createElement('div');
   wrap.className = 'layer-wrap';
-
   const hm = document.createElement('div');
   hm.className = 'layer-heatmap';
   const canvas = document.createElement('canvas');
   canvas.width = 16; canvas.height = 16;
   hm.appendChild(canvas);
   layerCanvases.push(canvas);
-
   const meta = document.createElement('div');
   meta.className = 'layer-meta';
-  meta.innerHTML = `<span class="layer-name">${layerNames[i]}</span><span class="layer-energy" id="energy-${i}"></span>`;
-
+  meta.innerHTML = `<span class="layer-name">${layerNames[i]}</span><span id="energy-${i}" style="color:rgba(57,255,20,0.35)"></span>`;
   wrap.appendChild(hm);
   wrap.appendChild(meta);
   spineScroll.appendChild(wrap);
-
-  // connector between layers (except after last)
   if (i < N_LAYERS - 1) {
     const conn = document.createElement('div');
     conn.className = 'layer-connector';
-    // a few animated particles
     for (let p = 0; p < 3; p++) {
       const dot = document.createElement('div');
       dot.className = 'particle-track';
-      dot.style.left = (30 + Math.random() * 60) + '%';
+      dot.style.left = (18 + Math.random() * 64) + '%';
       dot.style.animationDelay = (Math.random() * 2) + 's';
-      dot.style.animationDuration = (1.5 + Math.random()) + 's';
+      dot.style.animationDuration = (1.1 + Math.random() * 1.1) + 's';
       conn.appendChild(dot);
     }
     spineScroll.appendChild(conn);
   }
 }
 
-// ── Gallery ──
+// ─────────────────────────────────────────
+// BUILD GALLERY
+// ─────────────────────────────────────────
 const galleryDiv = document.getElementById('gallery');
 const galleryCanvases = [];
 for (let i = 0; i < 36; i++) {
@@ -443,43 +475,41 @@ for (let i = 0; i < 36; i++) {
   galleryCanvases.push(c);
 }
 
-// ── Helpers ──
+// ─────────────────────────────────────────
+// DRAW HELPERS
+// ─────────────────────────────────────────
 function drawGrid(canvas, grid) {
   if (!grid || !grid.length) return;
   const ctx = canvas.getContext('2d');
-  const rows = grid.length, cols = grid[0].length;
-  canvas.width = cols; canvas.height = rows;
-  const img = ctx.createImageData(cols, rows);
-  for (let r = 0; r < rows; r++)
-    for (let c = 0; c < cols; c++) {
-      const idx = (r * cols + c) * 4;
-      const color = PALETTE[grid[r][c]] || [0,0,0];
-      img.data[idx]=color[0]; img.data[idx+1]=color[1]; img.data[idx+2]=color[2]; img.data[idx+3]=255;
+  const R = grid.length, C = grid[0].length;
+  canvas.width = C; canvas.height = R;
+  const img = ctx.createImageData(C, R);
+  for (let r = 0; r < R; r++)
+    for (let c = 0; c < C; c++) {
+      const i = (r*C+c)*4, p = PALETTE[grid[r][c]]||[0,0,0];
+      img.data[i]=p[0]; img.data[i+1]=p[1]; img.data[i+2]=p[2]; img.data[i+3]=255;
     }
   ctx.putImageData(img, 0, 0);
+}
+
+function heatPixel(v) {
+  const t = Math.min(1, Math.max(0, v)) * 6.99;
+  const lo = Math.floor(t), hi = Math.min(7, lo+1), f = t - lo;
+  const a = HEAT[lo], b = HEAT[hi];
+  return [Math.round(a[0]+(b[0]-a[0])*f), Math.round(a[1]+(b[1]-a[1])*f), Math.round(a[2]+(b[2]-a[2])*f)];
 }
 
 function drawHeatmap(canvas, map) {
   if (!map || !map.length) return;
   const ctx = canvas.getContext('2d');
-  const rows = map.length, cols = map[0].length;
-  canvas.width = cols; canvas.height = rows;
-  const flat = map.flat();
-  const mx = Math.max(...flat, 0.001);
-  const img = ctx.createImageData(cols, rows);
-  for (let r = 0; r < rows; r++)
-    for (let c = 0; c < cols; c++) {
-      const v = map[r][c] / mx;
-      const t = Math.min(1, Math.max(0, v));
-      const i = t * 6.99;
-      const lo = Math.floor(i), hi = Math.min(7, lo+1);
-      const f = i - lo;
-      const a = HEAT[lo], b = HEAT[hi];
-      const idx = (r * cols + c) * 4;
-      img.data[idx]   = Math.round(a[0]+(b[0]-a[0])*f);
-      img.data[idx+1] = Math.round(a[1]+(b[1]-a[1])*f);
-      img.data[idx+2] = Math.round(a[2]+(b[2]-a[2])*f);
-      img.data[idx+3] = 255;
+  const R = map.length, C = map[0].length;
+  canvas.width = C; canvas.height = R;
+  const flat = map.flat(), mx = Math.max(...flat, 0.001);
+  const img = ctx.createImageData(C, R);
+  for (let r = 0; r < R; r++)
+    for (let c = 0; c < C; c++) {
+      const px = heatPixel(map[r][c]/mx), i = (r*C+c)*4;
+      img.data[i]=px[0]; img.data[i+1]=px[1]; img.data[i+2]=px[2]; img.data[i+3]=255;
     }
   ctx.putImageData(img, 0, 0);
 }
@@ -492,17 +522,8 @@ function drawEmbedSim(sim) {
   const img = ctx.createImageData(n, n);
   for (let r = 0; r < n; r++)
     for (let c = 0; c < n; c++) {
-      const v = (sim[r][c] + 1) / 2;
-      const t = Math.min(1, Math.max(0, v));
-      const i = t * 6.99;
-      const lo = Math.floor(i), hi = Math.min(7, lo+1);
-      const f = i - lo;
-      const a = HEAT[lo], b = HEAT[hi];
-      const idx = (r * n + c) * 4;
-      img.data[idx]   = Math.round(a[0]+(b[0]-a[0])*f);
-      img.data[idx+1] = Math.round(a[1]+(b[1]-a[1])*f);
-      img.data[idx+2] = Math.round(a[2]+(b[2]-a[2])*f);
-      img.data[idx+3] = 255;
+      const px = heatPixel((sim[r][c]+1)/2), i = (r*n+c)*4;
+      img.data[i]=px[0]; img.data[i+1]=px[1]; img.data[i+2]=px[2]; img.data[i+3]=255;
     }
   ctx.putImageData(img, 0, 0);
 }
@@ -513,16 +534,8 @@ function drawConfidence(canvas, flatConf) {
   canvas.width = 16; canvas.height = 16;
   const img = ctx.createImageData(16, 16);
   for (let i = 0; i < 256 && i < flatConf.length; i++) {
-    const v = Math.min(1, flatConf[i]);
-    const ti = v * 6.99;
-    const lo = Math.floor(ti), hi = Math.min(7, lo+1);
-    const f = ti - lo;
-    const a = HEAT[lo], b = HEAT[hi];
-    const idx = i * 4;
-    img.data[idx]   = Math.round(a[0]+(b[0]-a[0])*f);
-    img.data[idx+1] = Math.round(a[1]+(b[1]-a[1])*f);
-    img.data[idx+2] = Math.round(a[2]+(b[2]-a[2])*f);
-    img.data[idx+3] = 180;
+    const px = heatPixel(Math.min(1, flatConf[i])), idx = i*4;
+    img.data[idx]=px[0]; img.data[idx+1]=px[1]; img.data[idx+2]=px[2]; img.data[idx+3]=180;
   }
   ctx.putImageData(img, 0, 0);
 }
@@ -532,49 +545,178 @@ function updateSparkline(svgId, history, maxLen) {
   const lines = el.querySelectorAll('polyline');
   const data = history.slice(-maxLen);
   if (data.length < 2) return;
-  const max = Math.max(...data, 0.001), min = Math.min(...data);
-  const range = max - min || 0.001;
-  const pts = data.map((v, i) => `${(i/(maxLen-1))*200},${34-((v-min)/range)*32}`).join(' ');
+  const max = Math.max(...data, 0.001), min = Math.min(...data), range = max-min||0.001;
+  const pts = data.map((v,i) => `${(i/(maxLen-1))*200},${34-((v-min)/range)*32}`).join(' ');
   lines.forEach(l => l.setAttribute('points', pts));
 }
 
-// ── WebSocket ──
-function connect() {
-  const ws = new WebSocket(`ws://${location.hostname||'localhost'}:8765`);
-  ws.onopen = () => {
-    document.getElementById('conn').className = 'connected';
-    document.getElementById('conn-text').textContent = 'Linked';
-  };
-  ws.onclose = () => {
-    document.getElementById('conn').className = 'disconnected';
-    document.getElementById('conn-text').textContent = 'Disconnected';
-    setTimeout(connect, 2500);
-  };
-  ws.onerror = () => ws.close();
-  ws.onmessage = e => { const m = JSON.parse(e.data); handle(m.event, m.data); };
+// ─────────────────────────────────────────
+// MURAL
+// ─────────────────────────────────────────
+const muralCanvas = document.getElementById('mural-canvas');
+const muralCtx = muralCanvas.getContext('2d');
+
+const ZOOM_STEPS = [4,6,8,10,12,16,20,24,32,48,64];
+
+function muralZoom(delta) {
+  let idx = ZOOM_STEPS.indexOf(muralTileSize);
+  if (idx === -1) idx = ZOOM_STEPS.indexOf(16);
+  idx = Math.max(0, Math.min(ZOOM_STEPS.length-1, idx+delta));
+  muralTileSize = ZOOM_STEPS[idx];
+  document.getElementById('zoom-val').textContent = muralTileSize + 'px';
+  renderMural();
 }
 
+function toggleMuralMode() {
+  muralMode = muralMode === 'wallpaper' ? 'kaleidoscope' : 'wallpaper';
+  const btn = document.getElementById('mural-mode-btn');
+  btn.textContent = muralMode === 'kaleidoscope' ? 'Kaleidoscope' : 'Wallpaper';
+  btn.classList.toggle('kaleido', muralMode === 'kaleidoscope');
+  renderMural();
+}
+
+function tileToOffscreen(grid, tileSize) {
+  const src = new OffscreenCanvas(16, 16);
+  const sctx = src.getContext('2d');
+  const img = sctx.createImageData(16, 16);
+  for (let r = 0; r < 16; r++)
+    for (let c = 0; c < 16; c++) {
+      const i=(r*16+c)*4, p=PALETTE[(grid[r]&&grid[r][c])||0];
+      img.data[i]=p[0]; img.data[i+1]=p[1]; img.data[i+2]=p[2]; img.data[i+3]=255;
+    }
+  sctx.putImageData(img, 0, 0);
+  if (tileSize === 16) return src;
+  const out = new OffscreenCanvas(tileSize, tileSize);
+  const octx = out.getContext('2d');
+  octx.imageSmoothingEnabled = false;
+  octx.drawImage(src, 0, 0, tileSize, tileSize);
+  return out;
+}
+
+function rot90(g) {
+  const n=g.length;
+  return Array.from({length:n},(_,r)=>Array.from({length:n},(_,c)=>g[n-1-c][r]));
+}
+function flipLR(g) { return g.map(r=>[...r].reverse()); }
+function randomTransform(g) {
+  let r = g.map(row=>[...row]);
+  for (let k=Math.floor(Math.random()*4);k>0;k--) r=rot90(r);
+  if (Math.random()<.5) r=flipLR(r);
+  return r;
+}
+
+function buildWallpaper(pieces, tileSize) {
+  const wrap = document.getElementById('mural-canvas-wrap');
+  const W=wrap.clientWidth, H=wrap.clientHeight;
+  const cols=Math.ceil(W/tileSize)+1, rows=Math.ceil(H/tileSize)+1;
+  const n=pieces.length;
+  const off=new OffscreenCanvas(cols*tileSize, rows*tileSize);
+  const octx=off.getContext('2d'); octx.imageSmoothingEnabled=false;
+  for (let gy=0;gy<rows;gy++)
+    for (let gx=0;gx<cols;gx++) {
+      const tile=tileToOffscreen(pieces[(gy*cols+gx)%n], tileSize);
+      octx.drawImage(tile, gx*tileSize, gy*tileSize);
+    }
+  return off;
+}
+
+function buildKaleido(pieces, tileSize) {
+  const wrap = document.getElementById('mural-canvas-wrap');
+  const W=wrap.clientWidth, H=wrap.clientHeight;
+  if (!pieces.length) return buildWallpaper(allPieces.length?allPieces:pieces, tileSize);
+  const k=Math.min(pieces.length, 1+Math.floor(Math.random()*5));
+  const pool=[...pieces].sort(()=>Math.random()-.5).slice(0,k);
+  const hC=Math.ceil(W/2/tileSize)+1, hR=Math.ceil(H/2/tileSize)+1;
+  const qW=hC*tileSize, qH=hR*tileSize;
+  const quad=new OffscreenCanvas(qW,qH);
+  const qctx=quad.getContext('2d'); qctx.imageSmoothingEnabled=false;
+  for (let gy=0;gy<hR;gy++)
+    for (let gx=0;gx<hC;gx++) {
+      const p=randomTransform(pool[Math.floor(Math.random()*pool.length)]);
+      qctx.drawImage(tileToOffscreen(p,tileSize), gx*tileSize, gy*tileSize);
+    }
+  const full=new OffscreenCanvas(qW*2, qH*2);
+  const fctx=full.getContext('2d'); fctx.imageSmoothingEnabled=false;
+  fctx.drawImage(quad,0,0);
+  fctx.save(); fctx.translate(qW*2,0); fctx.scale(-1,1); fctx.drawImage(quad,0,0); fctx.restore();
+  fctx.save(); fctx.translate(0,qH*2); fctx.scale(1,-1); fctx.drawImage(quad,0,0); fctx.restore();
+  fctx.save(); fctx.translate(qW*2,qH*2); fctx.scale(-1,-1); fctx.drawImage(quad,0,0); fctx.restore();
+  return full;
+}
+
+function renderMural() {
+  const pieces = muralMode==='kaleidoscope'&&selectedPieces.length ? selectedPieces
+               : allPieces.length ? allPieces : [];
+  const overlay = document.getElementById('mural-overlay');
+  if (!pieces.length) { overlay.textContent='no pieces yet'; return; }
+  overlay.textContent='';
+  const wrap=document.getElementById('mural-canvas-wrap');
+  const W=wrap.clientWidth, H=wrap.clientHeight;
+  muralCanvas.width=W; muralCanvas.height=H;
+  muralCtx.imageSmoothingEnabled=false;
+  const src = muralMode==='kaleidoscope'&&selectedPieces.length
+    ? buildKaleido(selectedPieces, muralTileSize)
+    : buildWallpaper(pieces, muralTileSize);
+  muralCtx.drawImage(src, 0, 0, W, H);
+}
+
+function startKaleidoAnim() {
+  stopKaleidoAnim();
+  kaleidoInterval = setInterval(()=>{
+    if (document.getElementById('page-mural').classList.contains('active')) renderMural();
+  }, 111);
+}
+function stopKaleidoAnim() {
+  if (kaleidoInterval) { clearInterval(kaleidoInterval); kaleidoInterval=null; }
+}
+
+document.getElementById('mural-canvas-wrap').addEventListener('wheel', e=>{
+  e.preventDefault(); muralZoom(e.deltaY<0?1:-1);
+}, {passive:false});
+
+window.addEventListener('resize', ()=>{
+  if (document.getElementById('page-mural').classList.contains('active')) renderMural();
+});
+
+// ─────────────────────────────────────────
+// PHASE
+// ─────────────────────────────────────────
 function setPhase(p) {
   document.getElementById('phase-text').textContent = p;
   document.getElementById('stat-phase').textContent = p;
+  document.getElementById('mural-phase').textContent = p;
   const dot = document.getElementById('phase-dot');
-  const c = {training:'#29adff',generating:'#6c5ce7',scoring:'#00e436',finetuning:'#ffa300'}[p]||'#6c5ce7';
+  const phaseColors = {
+    training:'#29adff', generating:'#6c5ce7',
+    scoring:'#39ff14', finetuning:'#ffb300',
+  };
+  const c = phaseColors[p] || '#39ff14';
   dot.style.background = c;
   dot.style.boxShadow = `0 0 8px ${c}`;
-  // tint connector particles
   document.querySelectorAll('.particle-track').forEach(d => d.style.background = c);
+}
+
+// ─────────────────────────────────────────
+// WEBSOCKET
+// ─────────────────────────────────────────
+function connect() {
+  const ws = new WebSocket(`ws://${location.hostname||'localhost'}:8765`);
+  ws.onopen = ()=>{ document.getElementById('conn').className='connected'; document.getElementById('conn-text').textContent='Linked'; };
+  ws.onclose = ()=>{ document.getElementById('conn').className='disconnected'; document.getElementById('conn-text').textContent='Disconnected'; setTimeout(connect,2500); };
+  ws.onerror = ()=>ws.close();
+  ws.onmessage = e=>{ const m=JSON.parse(e.data); handle(m.event, m.data); };
 }
 
 function handle(event, data) {
   switch (event) {
+
   case 'train_start': setPhase('training'); break;
 
   case 'train_step': {
     lossHistory.push(data.loss);
     gradHistory.push(data.grad_norm||0);
-    if (lossHistory.length > 500) lossHistory = lossHistory.slice(-300);
-    if (gradHistory.length > 500) gradHistory = gradHistory.slice(-300);
-    currentGradNorm = data.grad_norm||0;
+    if (lossHistory.length>500) lossHistory=lossHistory.slice(-300);
+    if (gradHistory.length>500) gradHistory=gradHistory.slice(-300);
     document.getElementById('stat-loss').textContent = data.loss.toFixed(4);
     updateSparkline('loss-chart', lossHistory, 200);
     updateSparkline('grad-chart', gradHistory, 200);
@@ -582,43 +724,50 @@ function handle(event, data) {
   }
 
   case 'neural_activity': {
-    const { layer_maps, embedding_sim, weight_norms } = data;
-    for (let li = 0; li < Math.min(layer_maps.length, N_LAYERS); li++) {
+    const {layer_maps, embedding_sim, weight_norms} = data;
+    for (let li=0; li<Math.min(layer_maps.length,N_LAYERS); li++)
       drawHeatmap(layerCanvases[li], layer_maps[li]);
-    }
     if (weight_norms) {
-      const mx = Math.max(...weight_norms, 0.001);
-      for (let i = 0; i < weight_norms.length; i++) {
-        const el = document.getElementById(`energy-${i}`);
-        if (el) el.textContent = (weight_norms[i]/mx*100).toFixed(0) + '%';
+      const mx=Math.max(...weight_norms,0.001);
+      for (let i=0;i<weight_norms.length;i++) {
+        const el=document.getElementById(`energy-${i}`);
+        if (el) el.textContent=(weight_norms[i]/mx*100).toFixed(0)+'%';
       }
     }
     if (embedding_sim) drawEmbedSim(embedding_sim);
     break;
   }
 
-  case 'gen_start':
+  case 'gen_start': {
     setPhase('generating');
     document.getElementById('stat-gen').textContent = data.generation;
     document.getElementById('stat-temp').textContent = data.temperature.toFixed(3);
     document.getElementById('meta-gen').textContent = data.generation;
     document.getElementById('meta-temp').textContent = data.temperature.toFixed(3);
-    galleryCanvases.forEach(c => { c.getContext('2d').clearRect(0,0,16,16); c.classList.remove('selected'); });
+    document.getElementById('mural-gen-info').textContent = `gen ${data.generation}  ·  temp ${data.temperature.toFixed(3)}`;
+    galleryCanvases.forEach(c=>{ c.getContext('2d').clearRect(0,0,16,16); c.classList.remove('selected'); });
+    stopKaleidoAnim();
     break;
+  }
 
   case 'gen_progress': {
-    const { grids } = data;
-    for (let i = 0; i < Math.min(grids.length, 36); i++) if (grids[i]) drawGrid(galleryCanvases[i], grids[i]);
+    const {grids} = data;
+    for (let i=0;i<Math.min(grids.length,36);i++) if(grids[i]) drawGrid(galleryCanvases[i], grids[i]);
+    if (grids&&grids.length&&document.getElementById('page-mural').classList.contains('active')) {
+      allPieces=grids; renderMural();
+    }
     break;
   }
 
   case 'gen_pieces': {
-    for (let i = 0; i < Math.min(data.pieces.length, 36); i++) drawGrid(galleryCanvases[i], data.pieces[i]);
+    allPieces = data.pieces;
+    for (let i=0;i<Math.min(data.pieces.length,36);i++) drawGrid(galleryCanvases[i], data.pieces[i]);
+    if (document.getElementById('page-mural').classList.contains('active')) renderMural();
     break;
   }
 
   case 'gen_confidences': {
-    if (data.confidences && data.confidences[0])
+    if (data.confidences&&data.confidences[0])
       drawConfidence(document.getElementById('confidence-overlay'), data.confidences[0]);
     break;
   }
@@ -626,30 +775,46 @@ function handle(event, data) {
   case 'scoring_start': setPhase('scoring'); break;
 
   case 'gen_scored': {
-    const { pieces, scores } = data;
-    let bestIdx = 0, bestVal = -1;
-    for (let i = 0; i < scores.length; i++) { const s = scores[i].composite||0; if (s>bestVal){bestVal=s;bestIdx=i;} }
+    const {pieces, scores} = data;
+    allPieces = pieces;
+    let bestIdx=0, bestVal=-1;
+    for (let i=0;i<scores.length;i++) { const s=scores[i].composite||0; if(s>bestVal){bestVal=s;bestIdx=i;} }
     if (pieces[bestIdx]) {
       drawGrid(document.getElementById('best-piece'), pieces[bestIdx]);
       document.getElementById('meta-score').textContent = bestVal.toFixed(3);
-      const w = document.getElementById('best-wrap');
+      const w=document.getElementById('best-wrap');
       w.classList.remove('flash'); void w.offsetWidth; w.classList.add('flash');
     }
+    if (document.getElementById('page-mural').classList.contains('active')) renderMural();
     break;
   }
 
   case 'gen_selected': {
-    galleryCanvases.forEach(c => c.classList.remove('selected'));
-    if (data.indices) data.indices.forEach(i => { if (i<galleryCanvases.length) galleryCanvases[i].classList.add('selected'); });
+    galleryCanvases.forEach(c=>c.classList.remove('selected'));
+    const {indices} = data;
+    if (indices) {
+      indices.forEach(i=>{ if(i<galleryCanvases.length) galleryCanvases[i].classList.add('selected'); });
+      selectedPieces = indices.filter(i=>i<allPieces.length).map(i=>allPieces[i]);
+    }
     break;
   }
 
-  case 'finetune_start': setPhase('finetuning'); break;
-  case 'train_end': break;
+  case 'finetune_start': {
+    setPhase('finetuning');
+    if (selectedPieces.length) {
+      muralMode='kaleidoscope';
+      const btn=document.getElementById('mural-mode-btn');
+      btn.textContent='Kaleidoscope'; btn.classList.add('kaleido');
+    }
+    startKaleidoAnim();
+    break;
+  }
+
+  case 'train_end': stopKaleidoAnim(); break;
   case 'saving_complete': break;
 
   case 'gen_complete': {
-    const s = data.summary;
+    const s=data.summary;
     if (s) { document.getElementById('stat-gen').textContent=s.generation; document.getElementById('stat-temp').textContent=s.temperature.toFixed(3); }
     break;
   }
@@ -658,8 +823,6 @@ function handle(event, data) {
     document.getElementById('phase-text').textContent = data.phase||'initializing';
     document.getElementById('stat-phase').textContent = data.phase||'init';
     break;
-
-  case 'evolution_step': break;
   }
 }
 
