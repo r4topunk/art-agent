@@ -358,6 +358,49 @@ class GASLoop:
             lr=self.config.finetune_lr,
         )
 
+    @staticmethod
+    def _make_kaleidoscope(pil_images: list, size: int = 1024) -> "PIL.Image.Image":
+        """Build a 4-way mirrored kaleidoscope from random pieces."""
+        import PIL.Image
+
+        # Pick 1-5 source images, tile into a quadrant, then mirror
+        k = random.randint(1, min(5, len(pil_images)))
+        pool = random.sample(pil_images, k)
+
+        # Quadrant: fill with randomly transformed tiles
+        half = size // 2
+        n_tiles = random.randint(4, 8)  # tiles per side in quadrant
+        tile_size = max(1, half // n_tiles)
+        cols = (half + tile_size - 1) // tile_size
+        rows = (half + tile_size - 1) // tile_size
+
+        quad = PIL.Image.new("RGB", (half, half), color=(0, 0, 0))
+        for gy in range(rows):
+            for gx in range(cols):
+                img = random.choice(pool).resize((tile_size, tile_size), PIL.Image.NEAREST)
+                # Random rotation (0, 90, 180, 270)
+                rot = random.choice([0, 90, 180, 270])
+                if rot:
+                    img = img.rotate(rot)
+                # Random horizontal flip
+                if random.random() < 0.5:
+                    img = img.transpose(PIL.Image.FLIP_LEFT_RIGHT)
+                quad.paste(img, (gx * tile_size, gy * tile_size))
+
+        # Crop quadrant to exact half size
+        quad = quad.crop((0, 0, half, half))
+
+        # Mirror: right = fliplr, bottom = flipud
+        right = quad.transpose(PIL.Image.FLIP_LEFT_RIGHT)
+        top = PIL.Image.new("RGB", (size, half))
+        top.paste(quad, (0, 0))
+        top.paste(right, (half, 0))
+        bottom = top.transpose(PIL.Image.FLIP_TOP_BOTTOM)
+        full = PIL.Image.new("RGB", (size, size))
+        full.paste(top, (0, 0))
+        full.paste(bottom, (0, half))
+        return full
+
     def _save_generation_sync(
         self,
         gen_dir: Path,
@@ -422,6 +465,15 @@ class GASLoop:
             x, y = col_i * cell, row * cell
             grid_img.paste(img.resize((cell, cell), PIL.Image.NEAREST), (x, y))
         grid_img.save(grids_dir / f"gen_{generation:03d}_grid.png")
+
+        # kaleidoscope/ — 3 kaleidoscope images from selected pieces (1024x1024)
+        kalei_dir = col_dir / "kaleidoscope"
+        kalei_dir.mkdir(parents=True, exist_ok=True)
+        selected_pil = [all_pil[i] for i in selections if i < len(all_pil)]
+        if len(selected_pil) >= 2:
+            for ki in range(3):
+                kalei_img = self._make_kaleidoscope(selected_pil, size=1024)
+                kalei_img.save(kalei_dir / f"gen_{generation:03d}_kalei_{ki + 1}.png")
 
         if self.event_bus:
             self.event_bus.emit("saving_piece", done=len(selections), total=len(selections))
