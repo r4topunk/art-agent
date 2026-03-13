@@ -27,10 +27,6 @@ class BirthWidget(Widget):
         self._confidences: np.ndarray | None = None
         self._filled: int = 0
         self._grid_size: int = 16
-        self._vlm_description: str | None = None
-        self._vlm_scores: dict | None = None
-        self._vlm_history: list[tuple[int, str]] = []
-        self._max_history: int = 5
         # Training state
         self._training_losses: list[float] = []
         self._training_step: int = 0
@@ -62,19 +58,11 @@ class BirthWidget(Widget):
         grid: np.ndarray,
         confidences: np.ndarray,
         piece_index: int = 0,
-        vlm_description: str | None = None,
-        vlm_scores: dict | None = None,
         generation: int = 0,
     ):
         self._grid = grid
         self._confidences = confidences
-        self._vlm_description = vlm_description
-        self._vlm_scores = vlm_scores
         self._filled = self._grid_size * self._grid_size
-        if vlm_description:
-            self._vlm_history.append((generation, vlm_description))
-            if len(self._vlm_history) > self._max_history:
-                self._vlm_history = self._vlm_history[-self._max_history:]
         self.refresh()
 
     @property
@@ -214,12 +202,7 @@ class BirthWidget(Widget):
             return self._render_training()
 
         result = Text()
-        has_vlm = self._vlm_description is not None
-
-        if has_vlm:
-            result.append("◉ SPECIMEN + VLM\n", style="bold magenta")
-        else:
-            result.append("◉ SPECIMEN\n", style="bold magenta")
+        result.append("◉ SPECIMEN\n", style="bold magenta")
 
         if self._grid is None:
             result.append("  Awaiting generation...\n", style="dim")
@@ -262,34 +245,13 @@ class BirthWidget(Widget):
             piece_lines.append(piece_line)
             conf_lines.append(conf_line)
 
-        if has_vlm:
-            vlm_lines = self._build_vlm_lines()
-            max_lines = max(len(piece_lines), len(vlm_lines))
-
-            result.append("  PIECE            CONF             VLM PERCEPTION\n", style="dim")
-            for i in range(max_lines):
-                result.append("  ")
-                if i < len(piece_lines):
-                    result.append(piece_lines[i])
-                else:
-                    result.append(" " * size)
-                result.append("  ")
-                if i < len(conf_lines):
-                    result.append(conf_lines[i])
-                else:
-                    result.append(" " * size)
-                result.append("  ")
-                if i < len(vlm_lines):
-                    result.append(vlm_lines[i])
-                result.append("\n")
-        else:
-            result.append("  PIECE            CONFIDENCE\n", style="dim")
-            for pl, cl in zip(piece_lines, conf_lines):
-                result.append("  ")
-                result.append(pl)
-                result.append("    ")
-                result.append(cl)
-                result.append("\n")
+        result.append("  PIECE            CONFIDENCE\n", style="dim")
+        for pl, cl in zip(piece_lines, conf_lines):
+            result.append("  ")
+            result.append(pl)
+            result.append("    ")
+            result.append(cl)
+            result.append("\n")
 
         pct = self._filled / (size * size)
         filled_bar = int(pct * 20)
@@ -306,57 +268,4 @@ class BirthWidget(Widget):
                     result.append(SPARK[idx], style=self._conf_color(c))
         result.append("\n")
 
-        if has_vlm and len(self._vlm_history) > 1:
-            result.append("\n  VLM HISTORY\n", style="bold dim")
-            for gen, desc in self._vlm_history[-4:-1]:
-                short = desc[:50] + "..." if len(desc) > 50 else desc
-                result.append(f"  G{gen:<3d} ", style="dim cyan")
-                result.append(f"{short}\n", style="dim")
-
         return result
-
-    def _build_vlm_lines(self) -> list[Text]:
-        lines: list[Text] = []
-        if not self._vlm_description:
-            return lines
-
-        desc = self._vlm_description.strip()
-        # piece(16) + 2 gaps + conf(16) + 2 gaps = 36 chars used; rest is VLM column
-        wrap_width = max(28, self._cw - 40)
-        words = desc.split()
-        current_line = ""
-        desc_lines = []
-        for word in words:
-            if len(current_line) + len(word) + 1 <= wrap_width:
-                current_line = f"{current_line} {word}" if current_line else word
-            else:
-                if current_line:
-                    desc_lines.append(current_line)
-                current_line = word
-        if current_line:
-            desc_lines.append(current_line)
-
-        header = Text()
-        header.append("VLM says:", style="bold bright_cyan")
-        lines.append(header)
-
-        for dl in desc_lines[:4]:
-            line = Text()
-            line.append(dl, style="white")
-            lines.append(line)
-        if len(desc_lines) > 4:
-            lines.append(Text("...", style="dim"))
-
-        lines.append(Text(""))
-
-        if self._vlm_scores:
-            bar_w = max(10, wrap_width - 16)
-            for key, label in [("vlm_interest", "Interest "), ("vlm_composition", "Composit."), ("vlm_creativity", "Creative "), ("vlm_composite", "VLM Total")]:
-                val = self._vlm_scores.get(key, 0)
-                line = Text()
-                line.append(f"{label} ", style="dim")
-                line.append(f"{val:.2f} ", style="bright_cyan" if val >= 0.4 else "dim")
-                line.append(self._score_bar(val, width=bar_w))
-                lines.append(line)
-
-        return lines

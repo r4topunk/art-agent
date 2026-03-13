@@ -25,8 +25,6 @@ class GASLoop:
         config: ArtConfig,
         device: torch.device,
         event_bus: EventBus | None = None,
-        use_vlm: bool = False,
-        vlm_model: str = "moondream",
     ) -> None:
         self.model = model
         self.config = config
@@ -36,8 +34,6 @@ class GASLoop:
         self.critic = ArtCritic(config)
         self.tokenizer = PixelTokenizer(config)
         self.generation = 0
-        self.use_vlm = use_vlm
-        self.vlm_model = vlm_model
         self._diversity_low = False
         # Archive of past selected pieces for repetition penalty
         self.archive: list[np.ndarray] = []
@@ -185,44 +181,6 @@ class GASLoop:
                 if matches > 4:
                     style_penalty = min(0.40, (matches - 4) * 0.05)
                     scores[i]["composite"] *= (1.0 - style_penalty)
-
-        if self.use_vlm:
-            try:
-                from art.vlm_critic import score_batch_with_vlm
-
-                def on_vlm_progress(done, total, result):
-                    if self.event_bus:
-                        idx = done - 1
-                        desc = result.get("vlm_description", "") if result else ""
-                        piece = pieces[idx] if idx < len(pieces) else None
-                        algo_score = scores[idx] if idx < len(scores) else {}
-                        vlm_scores_partial = {k: v for k, v in (result or {}).items()
-                                              if k.startswith("vlm_") and k != "vlm_description"}
-                        self.event_bus.emit(
-                            "vlm_progress",
-                            done=done, total=total,
-                            description=desc,
-                            piece=piece,
-                            algo_scores=algo_score,
-                            vlm_scores=vlm_scores_partial,
-                        )
-
-                vlm_scores = score_batch_with_vlm(pieces, model=self.vlm_model, on_progress=on_vlm_progress)
-                for i, vlm in enumerate(vlm_scores):
-                    if vlm is not None:
-                        scores[i]["vlm_interest"] = vlm["interest"]
-                        scores[i]["vlm_composition"] = vlm["composition"]
-                        scores[i]["vlm_creativity"] = vlm["creativity"]
-                        scores[i]["vlm_composite"] = vlm["vlm_composite"]
-                        if "vlm_description" in vlm:
-                            scores[i]["vlm_description"] = vlm["vlm_description"]
-                        # Blend: 50% algorithmic + 50% VLM
-                        scores[i]["composite"] = (
-                            0.5 * scores[i]["composite"]
-                            + 0.5 * vlm["vlm_composite"]
-                        )
-            except Exception as e:
-                print(f"[GAS] VLM scoring failed: {e}")
 
         return scores
 

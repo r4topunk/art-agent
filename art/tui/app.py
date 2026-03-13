@@ -191,16 +191,12 @@ class ArtApp(App):
         self,
         generations: int = 50,
         resume: bool = True,
-        use_vlm: bool = False,
-        vlm_model: str = "moondream",
         web: bool = False,
         web_port: int = 8765,
     ):
         super().__init__()
         self.generations = generations
         self.do_resume = resume
-        self.use_vlm = use_vlm
-        self.vlm_model = vlm_model
         self.event_bus = EventBus()
         self.config = ArtConfig()
 
@@ -223,17 +219,10 @@ class ArtApp(App):
     def on_mount(self):
         self.push_screen(DashboardScreen())
         self._wire_events()
-        if self.use_vlm:
-            try:
-                self.screen.query_one(HeaderWidget).vlm_active = True
-            except Exception:
-                pass
         audio.play_startup()
         self._log("SYS", "init", f"ArtAgent started — {self.generations} generations")
         self._log("SYS", "init", f"device={self.config.data_dir}  vocab={self.config.vocab_size}  colors={self.config.n_colors}")
         self._log("SYS", "init", f"model: d={self.config.d_model} h={self.config.n_heads} L={self.config.n_layers}")
-        if self.use_vlm:
-            self._log("VLM", "init", f"VLM enabled — model={self.vlm_model}")
         self._run_evolution()
 
     def _wire_events(self):
@@ -265,7 +254,6 @@ class ArtApp(App):
         bus.on("bootstrap_progress", self._on_bootstrap_progress)
         bus.on("bootstrap_save_progress", self._on_bootstrap_save_progress)
         bus.on("saving_piece", self._on_saving_piece)
-        bus.on("vlm_progress", self._on_vlm_progress)
 
     def _log(self, level: str, source: str, message: str):
         try:
@@ -521,38 +509,6 @@ class ArtApp(App):
         except Exception:
             pass
 
-    def _on_vlm_progress(self, done: int, total: int, description: str,
-                         piece=None, algo_scores=None, vlm_scores=None):
-        self.call_from_thread(self._u_vlm_progress, done, total, description,
-                              piece, algo_scores or {}, vlm_scores or {})
-
-    def _u_vlm_progress(self, done: int, total: int, description: str,
-                        piece, algo_scores: dict, vlm_scores: dict):
-        try:
-            pct = done / max(1, total) * 100
-            s = self.screen
-            s.query_one(StatusBar).update_status(f"VLM analyzing... {done}/{total} ({pct:.0f}%)")
-            s.query_one(HeaderWidget).phase = f"VLM {done}/{total}"
-            # Show piece in birth as soon as VLM reads it
-            if piece is not None and description:
-                conf = np.zeros(256)
-                if self._latest_confidences is not None:
-                    idx = done - 1
-                    if idx < self._latest_confidences.shape[0]:
-                        conf = self._latest_confidences[idx, 1:257]
-                s.query_one("#birth", BirthWidget).update_birth(
-                    piece, conf, done - 1,
-                    vlm_description=description,
-                    vlm_scores=vlm_scores if vlm_scores else None,
-                    generation=getattr(self, "_current_gen", 0),
-                )
-            if description:
-                self._log("VLM", "vlm", f"piece {done}/{total} — \"{description}\"")
-            else:
-                self._log("VLM", "vlm", f"analyzing piece {done}/{total}...")
-        except Exception:
-            pass
-
     # --- Generation events ---
 
     def _on_gen_start(self, generation: int, temperature: float):
@@ -613,20 +569,15 @@ class ArtApp(App):
             s.query_one("#gallery-panel", GalleryGrid).update_pieces(pieces, scores)
             s.query_one("#evolution-panel", EvolutionPanel).update_scores(scores)
 
-            # Birth: show best piece with its confidence + VLM info
+            # Birth: show best piece with its confidence
             ranked = sorted(range(len(scores)), key=lambda i: scores[i].get("composite", 0), reverse=True)
             if ranked:
                 best_idx = ranked[0]
                 conf = np.zeros(256)
                 if self._latest_confidences is not None and best_idx < self._latest_confidences.shape[0]:
                     conf = self._latest_confidences[best_idx, 1:257]
-                best_scores = scores[best_idx]
-                vlm_desc = best_scores.get("vlm_description")
-                vlm_scores = {k: v for k, v in best_scores.items() if k.startswith("vlm_") and k != "vlm_description"} or None
                 s.query_one("#birth", BirthWidget).update_birth(
                     pieces[best_idx], conf, best_idx,
-                    vlm_description=vlm_desc,
-                    vlm_scores=vlm_scores,
                     generation=getattr(self, "_current_gen", 0),
                 )
 
@@ -638,8 +589,6 @@ class ArtApp(App):
             best = max(composites)
             mean = sum(composites) / len(composites)
             self._log("SCORE", "critic", f"scored {len(scores)} pieces — best={best:.3f}  mean={mean:.3f}")
-            if ranked and scores[ranked[0]].get("vlm_description"):
-                self._log("VLM", "vlm", f"'{scores[ranked[0]]['vlm_description'][:60]}'")
         except Exception:
             pass
 
@@ -693,9 +642,8 @@ class ArtApp(App):
                 if ranked:
                     best_idx = ranked[0]
                     best_score = self._latest_scores[best_idx].get("composite", 0)
-                    vlm_score = self._latest_scores[best_idx].get("vlm_composite")
                     s.query_one("#timeline", TimelineWidget).add_generation(
-                        gen, self._latest_pieces[best_idx], best_score, vlm_score=vlm_score,
+                        gen, self._latest_pieces[best_idx], best_score,
                     )
         except Exception:
             pass
@@ -747,8 +695,6 @@ class ArtApp(App):
         runner = OvernightRunner(
             self.config,
             event_bus=self.event_bus,
-            use_vlm=self.use_vlm,
-            vlm_model=self.vlm_model,
         )
         if self.do_resume:
             if not runner.resume():

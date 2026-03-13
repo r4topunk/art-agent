@@ -49,7 +49,6 @@ class EvolutionPanel(Widget):
         super().__init__(**kwargs)
         self._mean_scores: list[float] = []
         self._max_scores: list[float] = []
-        self._vlm_mean_scores: list[float] = []
         self._latest_summary: dict | None = None
         self._latest_scores: list[dict] | None = None
 
@@ -65,9 +64,6 @@ class EvolutionPanel(Widget):
 
     def update_scores(self, scores: list[dict]) -> None:
         self._latest_scores = scores
-        vlm_vals = [s.get("vlm_composite", 0) for s in scores if "vlm_composite" in s]
-        if vlm_vals:
-            self._vlm_mean_scores.append(sum(vlm_vals) / len(vlm_vals))
         self.refresh()
 
     def render(self) -> Text:
@@ -110,14 +106,6 @@ class EvolutionPanel(Widget):
                 result.append(f"  {label:<5} {avg:.2f} ", style="white")
                 result.append(score_bar(avg, width=bar_w))
                 result.append("\n")
-
-            if self._vlm_mean_scores:
-                result.append("\n")
-                result.append("VLM TREND\n", style="bold bright_cyan")
-                result.append(mini_sparkline(self._vlm_mean_scores, width=spark_w))
-                result.append("\n")
-                vlm_avg = self._vlm_mean_scores[-1]
-                result.append(f"  VLM   {vlm_avg:.3f}\n", style="bright_cyan")
 
         return result
 

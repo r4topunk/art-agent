@@ -191,14 +191,6 @@ class DetailPanel(Widget):
             label = key.capitalize()[:10]
             score_lines.append((f"  {label:<11} {val:.3f} ", bar, color))
 
-        if "vlm_composite" in self._scores:
-            score_lines.append(("", "", "dim"))
-            for key, label in [("vlm_interest", "VLM Intrs"), ("vlm_composition", "VLM Comp"), ("vlm_creativity", "VLM Creat"), ("vlm_composite", "VLM Score")]:
-                val = self._scores.get(key, 0)
-                bar = _score_bar(val)
-                color = "green" if val >= 0.6 else "yellow" if val >= 0.4 else "red"
-                score_lines.append((f"  {label:<11} {val:.3f} ", bar, color))
-
         max_lines = max(len(large_lines), len(score_lines))
 
         for i in range(max_lines):
@@ -215,12 +207,6 @@ class DetailPanel(Widget):
                 result.append(bar, style=color)
 
             result.append("\n")
-
-        vlm_desc = self._scores.get("vlm_description")
-        if vlm_desc:
-            result.append("  VLM: ", style="bold cyan")
-            desc = vlm_desc if len(vlm_desc) <= 100 else vlm_desc[:97] + "..."
-            result.append(f"{desc}\n", style="italic white")
 
         result.append("\n")
         result.append(

@@ -22,8 +22,6 @@ class OvernightRunner:
         self,
         config: ArtConfig,
         event_bus: EventBus | None = None,
-        use_vlm: bool = False,
-        vlm_model: str = "moondream",
     ):
         """Initialize the OvernightRunner with config, device, model, and GASLoop."""
         self.config = config
@@ -38,8 +36,6 @@ class OvernightRunner:
         self.gas = GASLoop(
             self.model, config, self.device,
             event_bus=event_bus,
-            use_vlm=use_vlm,
-            vlm_model=vlm_model,
         )
 
         # Initialize evolution log and bootstrap patterns

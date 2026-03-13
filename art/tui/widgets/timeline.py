@@ -34,15 +34,15 @@ class TimelineWidget(Widget):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self._entries: list[tuple[int, np.ndarray, float, float | None]] = []
+        self._entries: list[tuple[int, np.ndarray, float]] = []
 
     @property
     def _max_visible(self) -> int:
         """Fit as many entries as the widget height allows."""
         return max(3, self.size.height - 4)  # border(2) + title(1) + footer(1)
 
-    def add_generation(self, generation: int, best_piece: np.ndarray, best_score: float, vlm_score: float | None = None):
-        self._entries.append((generation, best_piece, best_score, vlm_score))
+    def add_generation(self, generation: int, best_piece: np.ndarray, best_score: float):
+        self._entries.append((generation, best_piece, best_score))
         self.refresh()
 
     def render(self) -> Text:
@@ -57,15 +57,14 @@ class TimelineWidget(Widget):
         max_vis = self._max_visible
         visible = self._entries[-max_vis:]
 
-        all_scores = [s for _, _, s, _ in self._entries]
+        all_scores = [s for _, _, s in self._entries]
         min_s = min(all_scores) if all_scores else 0
         max_s = max(all_scores) if all_scores else 1
         range_s = max_s - min_s if max_s > min_s else 1.0
 
-        # Bar width fills remaining space after: "  G999 " (7) + piece(16) + " 0.65 " (6) + vlm(5) + star(2)
-        bar_w = max(3, cw - 34)
+        bar_w = max(3, cw - 29)
 
-        for gen, piece, score, vlm_score in visible:
+        for gen, piece, score in visible:
             score_color = "green" if score >= 0.6 else "yellow" if score >= 0.4 else "red"
 
             result.append(f"  G{gen:<3d} ", style="dim cyan")
@@ -74,9 +73,6 @@ class TimelineWidget(Widget):
 
             bar_len = int((score - min_s) / range_s * bar_w) if range_s > 0 else bar_w // 2
             result.append("█" * bar_len, style=score_color)
-
-            if vlm_score is not None:
-                result.append(f" v{vlm_score:.1f}", style="bright_cyan")
 
             if score == max_s and len(self._entries) > 1:
                 result.append(" ★", style="bright_yellow")

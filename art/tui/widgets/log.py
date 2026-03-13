@@ -14,7 +14,6 @@ LOG_STYLES = {
     "SELECT": ("magenta",      "▸"),
     "SAVE":   ("blue",         "▸"),
     "NEURAL": ("bright_cyan",  "▸"),
-    "VLM":    ("bright_cyan",  "▸"),
     "OK":     ("bright_green", "✓"),
     "WARN":   ("bright_yellow", "⚠"),
     "ERR":    ("bright_red",   "✗"),
