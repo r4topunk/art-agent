@@ -371,9 +371,6 @@ class GASLoop:
         from art.config import PALETTE_16
         import PIL.Image
 
-        pieces_dir = gen_dir / "pieces"
-        pieces_dir.mkdir(parents=True, exist_ok=True)
-
         # Only save the selected pieces (not all generated)
         selected_scores = [scores[i] for i in selections]
 
@@ -381,46 +378,50 @@ class GASLoop:
         best_local_idx = int(np.argmax([s["composite"] for s in selected_scores]))
         best_global_idx = selections[best_local_idx]
 
-        # Convert all pieces to PIL images (for grid) and selected ones to disk
+        # Convert all pieces to PIL images
         all_pil = []
-        best_pil = None
         for idx, piece in enumerate(pieces):
             h, w = piece.shape
             rgb = np.zeros((h, w, 3), dtype=np.uint8)
             for ci in range(self.config.n_colors):
                 mask = piece == ci
                 rgb[mask] = PALETTE_16[ci]
-            img = PIL.Image.fromarray(rgb, mode="RGB")
-            all_pil.append(img)
-            if idx == best_global_idx:
-                best_pil = img
+            all_pil.append(PIL.Image.fromarray(rgb, mode="RGB"))
 
-        for rank, idx in enumerate(selections):
-            all_pil[idx].save(pieces_dir / f"piece_{idx:04d}.png")
+        # --- Organized image folders ---
+        col_dir = self.config.collections_dir
 
-            # Also save the generation's best piece upscaled to 1024x1024
-            if idx == best_global_idx:
-                img_upscaled = all_pil[idx].resize((1024, 1024), PIL.Image.NEAREST)
-                img_upscaled.save(gen_dir / "best.png")
+        # all/ — every piece from this generation (native size)
+        all_dir = col_dir / "all"
+        all_dir.mkdir(parents=True, exist_ok=True)
+        for idx in range(len(all_pil)):
+            all_pil[idx].save(all_dir / f"gen_{generation:03d}_piece_{idx:02d}.png")
 
-        # Save 6x6 grid of all generated pieces (no margins) to shared grids folder
-        cell = 170  # 1020 // 6 = 170 exactly — no black border gap
+        # top5/ — top 5 selected pieces upscaled to 1024x1024
+        top5_dir = col_dir / "top5"
+        top5_dir.mkdir(parents=True, exist_ok=True)
+        ranked_selections = sorted(selections, key=lambda i: scores[i]["composite"], reverse=True)
+        for rank, idx in enumerate(ranked_selections[:5]):
+            upscaled = all_pil[idx].resize((1024, 1024), PIL.Image.NEAREST)
+            upscaled.save(top5_dir / f"gen_{generation:03d}_top{rank + 1}.png")
+
+        # hall_of_fame/ — single best piece per generation (1024x1024)
+        hall_dir = col_dir / "hall_of_fame"
+        hall_dir.mkdir(parents=True, exist_ok=True)
+        best_hof = all_pil[best_global_idx].resize((1024, 1024), PIL.Image.NEAREST)
+        best_hof.save(hall_dir / f"gen_{generation:03d}_best.png")
+
+        # grids/ — 6x6 grid of all pieces (1020x1020, no border gap)
+        grids_dir = col_dir / "grids"
+        grids_dir.mkdir(parents=True, exist_ok=True)
+        cell = 170
         grid_size = cell * 6  # 1020
         grid_img = PIL.Image.new("RGB", (grid_size, grid_size), color=(0, 0, 0))
         for i, img in enumerate(all_pil[:36]):
             row, col_i = divmod(i, 6)
             x, y = col_i * cell, row * cell
             grid_img.paste(img.resize((cell, cell), PIL.Image.NEAREST), (x, y))
-        grids_dir = self.config.collections_dir / "grids"
-        grids_dir.mkdir(parents=True, exist_ok=True)
         grid_img.save(grids_dir / f"gen_{generation:03d}_grid.png")
-
-        # Save best piece to hall_of_fame folder
-        hall_dir = self.config.collections_dir / "hall_of_fame"
-        hall_dir.mkdir(parents=True, exist_ok=True)
-        if best_pil is not None:
-            best_hof = best_pil.resize((1024, 1024), PIL.Image.NEAREST)
-            best_hof.save(hall_dir / f"gen_{generation:03d}_best.png")
 
         if self.event_bus:
             self.event_bus.emit("saving_piece", done=len(selections), total=len(selections))
@@ -435,7 +436,8 @@ class GASLoop:
         with open(gen_dir / "best.json", "w") as f:
             json.dump({"best_index": best_global_idx, "score": selected_scores[best_local_idx]}, f, indent=2)
 
-        checkpoint_path = gen_dir / "checkpoint.pt"
+        # Save checkpoint to a single fixed location (overwritten each gen, ~55MB)
+        checkpoint_path = self.config.collections_dir / "checkpoint.pt"
         torch.save(checkpoint_data, checkpoint_path)
 
     def save_generation(

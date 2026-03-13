@@ -74,8 +74,10 @@ class OvernightRunner:
             self.event_bus.emit("init_phase", phase="resume")
             self.event_bus.emit("resume_found", generation=latest_gen)
 
-        # Load checkpoint from latest generation
-        checkpoint_path = self.config.collections_dir / f"gen_{latest_gen}" / "checkpoint.pt"
+        # Load checkpoint — fixed location first, fallback to legacy per-gen path
+        checkpoint_path = self.config.collections_dir / "checkpoint.pt"
+        if not checkpoint_path.exists():
+            checkpoint_path = self.config.collections_dir / f"gen_{latest_gen}" / "checkpoint.pt"
         if checkpoint_path.exists():
             self.gas.trainer.load_checkpoint(checkpoint_path)
             print(f"Loaded checkpoint from generation {latest_gen}")
