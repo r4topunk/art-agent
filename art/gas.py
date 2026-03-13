@@ -359,7 +359,7 @@ class GASLoop:
         )
 
     @staticmethod
-    def _make_kaleidoscope(pil_images: list, size: int = 1024) -> "PIL.Image.Image":
+    def _make_kaleidoscope(pil_images: list, size: int = 1200) -> "PIL.Image.Image":
         """Build a 4-way mirrored kaleidoscope from random pieces."""
         import PIL.Image
 
@@ -445,20 +445,20 @@ class GASLoop:
         top5_dir.mkdir(parents=True, exist_ok=True)
         ranked_selections = sorted(selections, key=lambda i: scores[i]["composite"], reverse=True)
         for rank, idx in enumerate(ranked_selections[:5]):
-            upscaled = all_pil[idx].resize((1024, 1024), PIL.Image.NEAREST)
+            upscaled = all_pil[idx].resize((1200, 1200), PIL.Image.NEAREST)
             upscaled.save(top5_dir / f"gen_{generation:03d}_top{rank + 1}.png")
 
         # hall_of_fame/ — single best piece per generation (1024x1024)
         hall_dir = col_dir / "hall_of_fame"
         hall_dir.mkdir(parents=True, exist_ok=True)
-        best_hof = all_pil[best_global_idx].resize((1024, 1024), PIL.Image.NEAREST)
+        best_hof = all_pil[best_global_idx].resize((1200, 1200), PIL.Image.NEAREST)
         best_hof.save(hall_dir / f"gen_{generation:03d}_best.png")
 
         # grids/ — 6x6 grid of all pieces (1020x1020, no border gap)
         grids_dir = col_dir / "grids"
         grids_dir.mkdir(parents=True, exist_ok=True)
-        cell = 170
-        grid_size = cell * 6  # 1020
+        cell = 200
+        grid_size = cell * 6  # 1200
         grid_img = PIL.Image.new("RGB", (grid_size, grid_size), color=(0, 0, 0))
         for i, img in enumerate(all_pil[:36]):
             row, col_i = divmod(i, 6)
@@ -472,7 +472,7 @@ class GASLoop:
         selected_pil = [all_pil[i] for i in selections if i < len(all_pil)]
         if len(selected_pil) >= 2:
             for ki in range(3):
-                kalei_img = self._make_kaleidoscope(selected_pil, size=1024)
+                kalei_img = self._make_kaleidoscope(selected_pil, size=1200)
                 kalei_img.save(kalei_dir / f"gen_{generation:03d}_kalei_{ki + 1}.png")
 
         if self.event_bus:
