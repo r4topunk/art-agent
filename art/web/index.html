@@ -93,7 +93,6 @@ body {
    PAGE: NEURAL — fills viewport exactly
 ═══════════════════════════════════════════ */
 #page-main {
-  display: none;
   grid-template-columns: 280px 1fr 1fr;
   grid-template-rows: 1fr 64px;
 }
@@ -214,6 +213,7 @@ body {
   display: flex; flex-direction: column;
   gap: 4px;
   overflow: hidden;
+  background: #000;  /* masks sub-pixel hairline gaps on fractional-DPR displays */
 }
 #gallery {
   flex: 1;
@@ -229,7 +229,6 @@ body {
   border: none;
   transition: box-shadow .3s;
   display: block;
-  object-fit: fill;
 }
 #gallery canvas:hover { box-shadow: inset 0 0 0 1px rgba(57,255,20,0.3); }
 #gallery canvas.selected {
@@ -263,7 +262,7 @@ body {
 /* ═══════════════════════════════════════════
    PAGE: MURAL
 ═══════════════════════════════════════════ */
-#page-mural { display:none; flex-direction:column; }
+#page-mural { flex-direction:column; }
 #page-mural.active { display:flex; }
 
 #mural-toolbar {
@@ -419,13 +418,40 @@ const HEAT = [
 ];
 const N_LAYERS = 6;
 
+// Pre-compute PALETTE as flat Uint8 for fast tile rendering
+const PAL_FLAT = new Uint8Array(PALETTE.length * 4);
+for (let i = 0; i < PALETTE.length; i++) {
+  PAL_FLAT[i*4] = PALETTE[i][0];
+  PAL_FLAT[i*4+1] = PALETTE[i][1];
+  PAL_FLAT[i*4+2] = PALETTE[i][2];
+  PAL_FLAT[i*4+3] = 255;
+}
+
 // ─────────────────────────────────────────
 // STATE
 // ─────────────────────────────────────────
 let lossHistory = [], gradHistory = [];
 let allPieces = [], selectedPieces = [];
 let muralTileSize = 16, muralMode = 'wallpaper';
-let kaleidoInterval = null;
+let kaleidoRunning = false, kaleidoTimer = null;
+let muralAnimRunning = false, muralAnimRaf = null;
+
+// Tile cache: invalidated when tileSize or pieces change
+let tileCache = new Map();
+let tileCacheSize = -1;
+let tileCachePieces = null;
+
+// Reusable ImageData for 16x16 tile rendering
+const tileImgData = new ImageData(16, 16);
+
+// ── Mural transition state ──
+// Crossfade between generations: tiles flip staggered over TRANSITION_DURATION_MS.
+const TRANSITION_DURATION_MS = 3500;
+const MURAL_TICK_MS = 50;
+let oldPieces = [];            // previous generation (source for un-flipped slots)
+let newPieces = null;          // incoming generation (target for flipped slots)
+let transitionStartTime = 0;
+let transitionSchedule = null; // Float32Array of random thresholds per slot (0..1)
 
 // ─────────────────────────────────────────
 // TABS
@@ -496,10 +522,11 @@ function drawGrid(canvas, grid) {
   const R = grid.length, C = grid[0].length;
   canvas.width = C; canvas.height = R;
   const img = ctx.createImageData(C, R);
+  const d = img.data;
   for (let r = 0; r < R; r++)
     for (let c = 0; c < C; c++) {
-      const i = (r*C+c)*4, p = PALETTE[grid[r][c]]||[0,0,0];
-      img.data[i]=p[0]; img.data[i+1]=p[1]; img.data[i+2]=p[2]; img.data[i+3]=255;
+      const i = (r*C+c)*4, p = PALETTE[grid[r][c]]||PALETTE[0];
+      d[i]=p[0]; d[i+1]=p[1]; d[i+2]=p[2]; d[i+3]=255;
     }
   ctx.putImageData(img, 0, 0);
 }
@@ -516,12 +543,17 @@ function drawHeatmap(canvas, map) {
   const ctx = canvas.getContext('2d');
   const R = map.length, C = map[0].length;
   canvas.width = C; canvas.height = R;
-  const flat = map.flat(), mx = Math.max(...flat, 0.001);
+  // Find max without spread (avoids stack overflow on large maps)
+  let mx = 0.001;
+  for (let r = 0; r < R; r++)
+    for (let c = 0; c < C; c++)
+      if (map[r][c] > mx) mx = map[r][c];
   const img = ctx.createImageData(C, R);
+  const d = img.data;
   for (let r = 0; r < R; r++)
     for (let c = 0; c < C; c++) {
       const px = heatPixel(map[r][c]/mx), i = (r*C+c)*4;
-      img.data[i]=px[0]; img.data[i+1]=px[1]; img.data[i+2]=px[2]; img.data[i+3]=255;
+      d[i]=px[0]; d[i+1]=px[1]; d[i+2]=px[2]; d[i+3]=255;
     }
   ctx.putImageData(img, 0, 0);
 }
@@ -532,10 +564,11 @@ function drawEmbedSim(sim) {
   const n = sim.length;
   canvas.width = n; canvas.height = n;
   const img = ctx.createImageData(n, n);
+  const d = img.data;
   for (let r = 0; r < n; r++)
     for (let c = 0; c < n; c++) {
       const px = heatPixel((sim[r][c]+1)/2), i = (r*n+c)*4;
-      img.data[i]=px[0]; img.data[i+1]=px[1]; img.data[i+2]=px[2]; img.data[i+3]=255;
+      d[i]=px[0]; d[i+1]=px[1]; d[i+2]=px[2]; d[i+3]=255;
     }
   ctx.putImageData(img, 0, 0);
 }
@@ -545,9 +578,10 @@ function drawConfidence(canvas, flatConf) {
   const ctx = canvas.getContext('2d');
   canvas.width = 16; canvas.height = 16;
   const img = ctx.createImageData(16, 16);
+  const d = img.data;
   for (let i = 0; i < 256 && i < flatConf.length; i++) {
     const px = heatPixel(Math.min(1, flatConf[i])), idx = i*4;
-    img.data[idx]=px[0]; img.data[idx+1]=px[1]; img.data[idx+2]=px[2]; img.data[idx+3]=180;
+    d[idx]=px[0]; d[idx+1]=px[1]; d[idx+2]=px[2]; d[idx+3]=180;
   }
   ctx.putImageData(img, 0, 0);
 }
@@ -557,18 +591,58 @@ function updateSparkline(svgId, history, maxLen) {
   const lines = el.querySelectorAll('polyline');
   const data = history.slice(-maxLen);
   if (data.length < 2) return;
-  const max = Math.max(...data, 0.001), min = Math.min(...data), range = max-min||0.001;
+  let max = -Infinity, min = Infinity;
+  for (let i = 0; i < data.length; i++) {
+    if (data[i] > max) max = data[i];
+    if (data[i] < min) min = data[i];
+  }
+  if (max < 0.001) max = 0.001;
+  const range = max - min || 0.001;
   const pts = data.map((v,i) => `${(i/(maxLen-1))*200},${34-((v-min)/range)*32}`).join(' ');
   lines.forEach(l => l.setAttribute('points', pts));
 }
 
 // ─────────────────────────────────────────
-// MURAL
+// MURAL — tile cache + rendering
 // ─────────────────────────────────────────
 const muralCanvas = document.getElementById('mural-canvas');
 const muralCtx = muralCanvas.getContext('2d');
+let muralW = 0, muralH = 0;
 
 const ZOOM_STEPS = [4,6,8,10,12,16,20,24,32,48,64];
+
+function invalidateTileCache() {
+  tileCache.clear();
+  tileCacheSize = -1;
+  tileCachePieces = null;
+}
+
+function getCachedTile(grid, key, tileSize) {
+  if (tileCacheSize !== tileSize) { tileCache.clear(); tileCacheSize = tileSize; }
+  if (tileCache.has(key)) return tileCache.get(key);
+  // Cap cache size to prevent unbounded growth across many generations
+  if (tileCache.size > 200) tileCache.clear();
+  // Render 16x16 grid into reusable ImageData
+  const d = tileImgData.data;
+  for (let r = 0; r < 16; r++)
+    for (let c = 0; c < 16; c++) {
+      const i = (r*16+c)*4, pi = ((grid[r] && grid[r][c]) || 0) * 4;
+      d[i] = PAL_FLAT[pi]; d[i+1] = PAL_FLAT[pi+1]; d[i+2] = PAL_FLAT[pi+2]; d[i+3] = 255;
+    }
+  const src = new OffscreenCanvas(16, 16);
+  src.getContext('2d').putImageData(tileImgData, 0, 0);
+  let tile;
+  if (tileSize === 16) {
+    tile = src;
+  } else {
+    tile = new OffscreenCanvas(tileSize, tileSize);
+    const tctx = tile.getContext('2d');
+    tctx.imageSmoothingEnabled = false;
+    tctx.drawImage(src, 0, 0, tileSize, tileSize);
+  }
+  tileCache.set(key, tile);
+  return tile;
+}
 
 function muralZoom(delta) {
   let idx = ZOOM_STEPS.indexOf(muralTileSize);
@@ -587,86 +661,114 @@ function toggleMuralMode() {
   renderMural();
 }
 
-function tileToOffscreen(grid, tileSize) {
-  const src = new OffscreenCanvas(16, 16);
-  const sctx = src.getContext('2d');
-  const img = sctx.createImageData(16, 16);
-  for (let r = 0; r < 16; r++)
-    for (let c = 0; c < 16; c++) {
-      const i=(r*16+c)*4, p=PALETTE[(grid[r]&&grid[r][c])||0];
-      img.data[i]=p[0]; img.data[i+1]=p[1]; img.data[i+2]=p[2]; img.data[i+3]=255;
-    }
-  sctx.putImageData(img, 0, 0);
-  if (tileSize === 16) return src;
-  const out = new OffscreenCanvas(tileSize, tileSize);
-  const octx = out.getContext('2d');
-  octx.imageSmoothingEnabled = false;
-  octx.drawImage(src, 0, 0, tileSize, tileSize);
-  return out;
+// Canvas-level transforms instead of array copies
+function drawTileTransformed(ctx, tile, x, y, tileSize, rotations, flip) {
+  ctx.save();
+  ctx.translate(x + tileSize/2, y + tileSize/2);
+  if (rotations) ctx.rotate(rotations * Math.PI / 2);
+  if (flip) ctx.scale(-1, 1);
+  ctx.drawImage(tile, -tileSize/2, -tileSize/2);
+  ctx.restore();
 }
 
-function rot90(g) {
-  const n=g.length;
-  return Array.from({length:n},(_,r)=>Array.from({length:n},(_,c)=>g[n-1-c][r]));
-}
-function flipLR(g) { return g.map(r=>[...r].reverse()); }
-function randomTransform(g) {
-  let r = g.map(row=>[...row]);
-  for (let k=Math.floor(Math.random()*4);k>0;k--) r=rot90(r);
-  if (Math.random()<.5) r=flipLR(r);
-  return r;
+// Push new pieces into the transition pipeline.
+// Caller must set oldPieces before calling this.
+function muralTransition(incomingPieces) {
+  if (!incomingPieces || !incomingPieces.length) return;
+  // If mid-transition, snap: whatever was "new" becomes the old base
+  if (newPieces) oldPieces = newPieces;
+  newPieces = incomingPieces;
+  transitionStartTime = performance.now();
+  // Build staggered schedule: each slot gets a random trigger threshold in [0..1]
+  const wrap = document.getElementById('mural-canvas-wrap');
+  const W = wrap.clientWidth || 1920, H = wrap.clientHeight || 1080;
+  const cols = Math.ceil(W / muralTileSize) + 1, rows = Math.ceil(H / muralTileSize) + 1;
+  const total = cols * rows;
+  transitionSchedule = new Float32Array(total);
+  for (let i = 0; i < total; i++) transitionSchedule[i] = Math.random();
+  // Ensure mural animation loop is running
+  startMuralAnim();
 }
 
 function buildWallpaper(pieces, tileSize) {
   const wrap = document.getElementById('mural-canvas-wrap');
-  const W=wrap.clientWidth, H=wrap.clientHeight;
-  const cols=Math.ceil(W/tileSize)+1, rows=Math.ceil(H/tileSize)+1;
-  const n=pieces.length;
-  const off=new OffscreenCanvas(cols*tileSize, rows*tileSize);
-  const octx=off.getContext('2d'); octx.imageSmoothingEnabled=false;
-  for (let gy=0;gy<rows;gy++)
-    for (let gx=0;gx<cols;gx++) {
-      const tile=tileToOffscreen(pieces[(gy*cols+gx)%n], tileSize);
+  const W = wrap.clientWidth, H = wrap.clientHeight;
+  const cols = Math.ceil(W/tileSize)+1, rows = Math.ceil(H/tileSize)+1;
+  const now = performance.now();
+  const elapsed = now - transitionStartTime;
+  const progress = transitionSchedule ? Math.min(1, elapsed / TRANSITION_DURATION_MS) : 1;
+  const hasTransition = newPieces && oldPieces.length && transitionSchedule && progress < 1;
+  const basePieces = hasTransition ? oldPieces : pieces;
+  const n = basePieces.length;
+  const off = new OffscreenCanvas(cols*tileSize, rows*tileSize);
+  const octx = off.getContext('2d'); octx.imageSmoothingEnabled = false;
+  for (let gy = 0; gy < rows; gy++)
+    for (let gx = 0; gx < cols; gx++) {
+      const si = gy * cols + gx;
+      let src = basePieces;
+      let pi = si % n;
+      // During transition: each slot flips at its scheduled time
+      if (hasTransition && progress >= transitionSchedule[si]) {
+        src = newPieces;
+        pi = si % newPieces.length;
+      }
+      const cacheKey = (src === newPieces ? 'n' : 'o') + pi;
+      const tile = getCachedTile(src[pi], cacheKey, tileSize);
       octx.drawImage(tile, gx*tileSize, gy*tileSize);
     }
+  // When transition completes, promote new to current
+  if (transitionSchedule && progress >= 1) {
+    oldPieces = newPieces || pieces;
+    newPieces = null;
+    transitionSchedule = null;
+  }
   return off;
 }
 
 function buildKaleido(pieces, tileSize) {
   const wrap = document.getElementById('mural-canvas-wrap');
-  const W=wrap.clientWidth, H=wrap.clientHeight;
-  if (!pieces.length) return buildWallpaper(allPieces.length?allPieces:pieces, tileSize);
-  const k=Math.min(pieces.length, 1+Math.floor(Math.random()*5));
-  const pool=[...pieces].sort(()=>Math.random()-.5).slice(0,k);
-  const hC=Math.ceil(W/2/tileSize)+1, hR=Math.ceil(H/2/tileSize)+1;
-  const qW=hC*tileSize, qH=hR*tileSize;
-  const quad=new OffscreenCanvas(qW,qH);
-  const qctx=quad.getContext('2d'); qctx.imageSmoothingEnabled=false;
-  for (let gy=0;gy<hR;gy++)
-    for (let gx=0;gx<hC;gx++) {
-      const p=randomTransform(pool[Math.floor(Math.random()*pool.length)]);
-      qctx.drawImage(tileToOffscreen(p,tileSize), gx*tileSize, gy*tileSize);
+  const W = wrap.clientWidth, H = wrap.clientHeight;
+  if (!pieces.length) return buildWallpaper(allPieces.length ? allPieces : pieces, tileSize);
+  const k = Math.min(pieces.length, 1+Math.floor(Math.random()*5));
+  const pool = [...pieces].sort(() => Math.random()-.5).slice(0, k);
+  // Pre-cache pool tiles
+  const poolTiles = pool.map((p, i) => getCachedTile(p, 'k'+i, tileSize));
+  const hC = Math.ceil(W/2/tileSize)+1, hR = Math.ceil(H/2/tileSize)+1;
+  const qW = hC*tileSize, qH = hR*tileSize;
+  const quad = new OffscreenCanvas(qW, qH);
+  const qctx = quad.getContext('2d'); qctx.imageSmoothingEnabled = false;
+  for (let gy = 0; gy < hR; gy++)
+    for (let gx = 0; gx < hC; gx++) {
+      const tile = poolTiles[Math.floor(Math.random()*poolTiles.length)];
+      const rot = Math.floor(Math.random()*4);
+      const flip = Math.random() < 0.5;
+      drawTileTransformed(qctx, tile, gx*tileSize, gy*tileSize, tileSize, rot, flip);
     }
-  const full=new OffscreenCanvas(qW*2, qH*2);
-  const fctx=full.getContext('2d'); fctx.imageSmoothingEnabled=false;
-  fctx.drawImage(quad,0,0);
-  fctx.save(); fctx.translate(qW*2,0); fctx.scale(-1,1); fctx.drawImage(quad,0,0); fctx.restore();
-  fctx.save(); fctx.translate(0,qH*2); fctx.scale(1,-1); fctx.drawImage(quad,0,0); fctx.restore();
-  fctx.save(); fctx.translate(qW*2,qH*2); fctx.scale(-1,-1); fctx.drawImage(quad,0,0); fctx.restore();
+  const full = new OffscreenCanvas(qW*2, qH*2);
+  const fctx = full.getContext('2d'); fctx.imageSmoothingEnabled = false;
+  fctx.drawImage(quad, 0, 0);
+  fctx.save(); fctx.translate(qW*2, 0); fctx.scale(-1, 1); fctx.drawImage(quad, 0, 0); fctx.restore();
+  fctx.save(); fctx.translate(0, qH*2); fctx.scale(1, -1); fctx.drawImage(quad, 0, 0); fctx.restore();
+  fctx.save(); fctx.translate(qW*2, qH*2); fctx.scale(-1, -1); fctx.drawImage(quad, 0, 0); fctx.restore();
   return full;
 }
 
 function renderMural() {
-  const pieces = muralMode==='kaleidoscope'&&selectedPieces.length ? selectedPieces
+  const pieces = muralMode === 'kaleidoscope' && selectedPieces.length ? selectedPieces
                : allPieces.length ? allPieces : [];
   const overlay = document.getElementById('mural-overlay');
-  if (!pieces.length) { overlay.textContent='no pieces yet'; return; }
-  overlay.textContent='';
-  const wrap=document.getElementById('mural-canvas-wrap');
-  const W=wrap.clientWidth, H=wrap.clientHeight;
-  muralCanvas.width=W; muralCanvas.height=H;
-  muralCtx.imageSmoothingEnabled=false;
-  const src = muralMode==='kaleidoscope'&&selectedPieces.length
+  if (!pieces.length) { overlay.textContent = 'no pieces yet'; return; }
+  overlay.textContent = '';
+  const wrap = document.getElementById('mural-canvas-wrap');
+  const W = wrap.clientWidth, H = wrap.clientHeight;
+  // Only resize canvas when dimensions change (avoids backing store reset)
+  if (muralCanvas.width !== W || muralCanvas.height !== H) {
+    muralCanvas.width = W; muralCanvas.height = H;
+    muralW = W; muralH = H;
+  }
+  muralCtx.imageSmoothingEnabled = false;
+  muralCtx.clearRect(0, 0, W, H);
+  const src = muralMode === 'kaleidoscope' && selectedPieces.length
     ? buildKaleido(selectedPieces, muralTileSize)
     : buildWallpaper(pieces, muralTileSize);
   const ox = Math.round((W - src.width) / 2);
@@ -674,21 +776,50 @@ function renderMural() {
   muralCtx.drawImage(src, ox, oy);
 }
 
+// Wallpaper transition animation — runs during cross-gen blending
+function startMuralAnim() {
+  if (muralAnimRunning) return;
+  muralAnimRunning = true;
+  function tick() {
+    if (!muralAnimRunning) return;
+    if (document.getElementById('page-mural').classList.contains('active') && muralMode === 'wallpaper') {
+      renderMural();
+    }
+    // Stop animating once transition is complete
+    if (!transitionSchedule && !newPieces) {
+      muralAnimRunning = false;
+      return;
+    }
+    muralAnimRaf = setTimeout(tick, MURAL_TICK_MS);
+  }
+  muralAnimRaf = setTimeout(tick, MURAL_TICK_MS);
+}
+function stopMuralAnim() {
+  muralAnimRunning = false;
+  if (muralAnimRaf) { clearTimeout(muralAnimRaf); muralAnimRaf = null; }
+}
+
+// Kaleidoscope animation — runs during finetuning phase
 function startKaleidoAnim() {
-  stopKaleidoAnim();
-  kaleidoInterval = setInterval(()=>{
+  if (kaleidoRunning) return;
+  kaleidoRunning = true;
+  function tick() {
+    if (!kaleidoRunning) return;
     if (document.getElementById('page-mural').classList.contains('active')) renderMural();
-  }, 333);
+    kaleidoTimer = setTimeout(tick, 333);
+  }
+  kaleidoTimer = setTimeout(tick, 333);
 }
 function stopKaleidoAnim() {
-  if (kaleidoInterval) { clearInterval(kaleidoInterval); kaleidoInterval=null; }
+  kaleidoRunning = false;
+  if (kaleidoTimer) { clearTimeout(kaleidoTimer); kaleidoTimer = null; }
 }
 
-document.getElementById('mural-canvas-wrap').addEventListener('wheel', e=>{
-  e.preventDefault(); muralZoom(e.deltaY<0?1:-1);
+document.getElementById('mural-canvas-wrap').addEventListener('wheel', e => {
+  e.preventDefault(); muralZoom(e.deltaY < 0 ? 1 : -1);
 }, {passive:false});
 
-window.addEventListener('resize', ()=>{
+window.addEventListener('resize', () => {
   if (document.getElementById('page-mural').classList.contains('active')) renderMural();
 });
 
@@ -715,10 +846,17 @@ function setPhase(p) {
 // ─────────────────────────────────────────
 function connect() {
   const ws = new WebSocket(`ws://${location.hostname||'localhost'}:8765`);
-  ws.onopen = ()=>{ document.getElementById('conn').className='connected'; document.getElementById('conn-text').textContent='Linked'; };
-  ws.onclose = ()=>{ document.getElementById('conn').className='disconnected'; document.getElementById('conn-text').textContent='Disconnected'; setTimeout(connect,2500); };
-  ws.onerror = ()=>ws.close();
-  ws.onmessage = e=>{ const m=JSON.parse(e.data); handle(m.event, m.data); };
+  ws.onopen = () => { document.getElementById('conn').className='connected'; document.getElementById('conn-text').textContent='Linked'; };
+  ws.onclose = () => { document.getElementById('conn').className='disconnected'; document.getElementById('conn-text').textContent='Disconnected'; setTimeout(connect, 2500); };
+  ws.onerror = () => ws.close();
+  ws.onmessage = e => {
+    try {
+      const m = JSON.parse(e.data);
+      handle(m.event, m.data);
+    } catch(err) {
+      console.warn('ws parse error', err);
+    }
+  };
 }
 
 function handle(event, data) {
@@ -729,8 +867,8 @@ function handle(event, data) {
   case 'train_step': {
     lossHistory.push(data.loss);
     gradHistory.push(data.grad_norm||0);
-    if (lossHistory.length>500) lossHistory=lossHistory.slice(-300);
-    if (gradHistory.length>500) gradHistory=gradHistory.slice(-300);
+    if (lossHistory.length > 500) lossHistory = lossHistory.slice(-300);
+    if (gradHistory.length > 500) gradHistory = gradHistory.slice(-300);
     document.getElementById('stat-loss').textContent = data.loss.toFixed(4);
     updateSparkline('loss-chart', lossHistory, 200);
     updateSparkline('grad-chart', gradHistory, 200);
@@ -739,13 +877,15 @@ function handle(event, data) {
 
   case 'neural_activity': {
     const {layer_maps, embedding_sim, weight_norms} = data;
-    for (let li=0; li<Math.min(layer_maps.length,N_LAYERS); li++)
+    for (let li = 0; li < Math.min(layer_maps.length, N_LAYERS); li++)
       drawHeatmap(layerCanvases[li], layer_maps[li]);
     if (weight_norms) {
-      const mx=Math.max(...weight_norms,0.001);
-      for (let i=0;i<weight_norms.length;i++) {
-        const el=document.getElementById(`energy-${i}`);
-        if (el) el.textContent=(weight_norms[i]/mx*100).toFixed(0)+'%';
+      let mx = 0.001;
+      for (let i = 0; i < weight_norms.length; i++)
+        if (weight_norms[i] > mx) mx = weight_norms[i];
+      for (let i = 0; i < weight_norms.length; i++) {
+        const el = document.getElementById(`energy-${i}`);
+        if (el) el.textContent = (weight_norms[i]/mx*100).toFixed(0) + '%';
       }
     }
     if (embedding_sim) drawEmbedSim(embedding_sim);
@@ -759,28 +899,33 @@ function handle(event, data) {
     document.getElementById('meta-gen').textContent = data.generation;
     document.getElementById('meta-temp').textContent = data.temperature.toFixed(3);
     document.getElementById('mural-gen-info').textContent = `gen ${data.generation}  ·  temp ${data.temperature.toFixed(3)}`;
-    galleryCanvases.forEach(c=>{ c.getContext('2d').clearRect(0,0,16,16); c.classList.remove('selected'); });
+    galleryCanvases.forEach(c => { c.getContext('2d').clearRect(0,0,16,16); c.classList.remove('selected'); });
     break;
   }
 
   case 'gen_progress': {
     const {grids} = data;
-    for (let i=0;i<Math.min(grids.length,36);i++) if(grids[i]) drawGrid(galleryCanvases[i], grids[i]);
-    if (grids&&grids.length&&document.getElementById('page-mural').classList.contains('active')) {
-      allPieces=grids; renderMural();
-    }
+    for (let i = 0; i < Math.min(grids.length, 36); i++) if (grids[i]) drawGrid(galleryCanvases[i], grids[i]);
+    // Don't update mural with partial progress — wait for gen_pieces/gen_scored
     break;
   }
 
   case 'gen_pieces': {
+    const prevPieces = allPieces;
     allPieces = data.pieces;
-    for (let i=0;i<Math.min(data.pieces.length,36);i++) drawGrid(galleryCanvases[i], data.pieces[i]);
-    if (document.getElementById('page-mural').classList.contains('active')) renderMural();
+    for (let i = 0; i < Math.min(data.pieces.length, 36); i++) drawGrid(galleryCanvases[i], data.pieces[i]);
+    if (prevPieces.length) {
+      oldPieces = prevPieces;
+      muralTransition(data.pieces);
+    } else {
+      oldPieces = data.pieces;
+      if (document.getElementById('page-mural').classList.contains('active')) renderMural();
+    }
     break;
   }
 
   case 'gen_confidences': {
-    if (data.confidences&&data.confidences[0])
+    if (data.confidences && data.confidences[0])
       drawConfidence(document.getElementById('confidence-overlay'), data.confidences[0]);
     break;
   }
@@ -789,25 +934,32 @@ function handle(event, data) {
 
   case 'gen_scored': {
     const {pieces, scores} = data;
+    const prevPieces = allPieces;
     allPieces = pieces;
-    let bestIdx=0, bestVal=-1;
-    for (let i=0;i<scores.length;i++) { const s=scores[i].composite||0; if(s>bestVal){bestVal=s;bestIdx=i;} }
+    let bestIdx = 0, bestVal = -1;
+    for (let i = 0; i < scores.length; i++) { const s = scores[i].composite||0; if (s > bestVal) { bestVal = s; bestIdx = i; } }
     if (pieces[bestIdx]) {
       drawGrid(document.getElementById('best-piece'), pieces[bestIdx]);
       document.getElementById('meta-score').textContent = bestVal.toFixed(3);
-      const w=document.getElementById('best-wrap');
-      w.classList.remove('flash'); void w.offsetWidth; w.classList.add('flash');
+      const w = document.getElementById('best-wrap');
+      w.classList.remove('flash');
+      requestAnimationFrame(() => requestAnimationFrame(() => w.classList.add('flash')));
     }
-    if (document.getElementById('page-mural').classList.contains('active')) renderMural();
+    if (muralMode === 'wallpaper' && prevPieces.length) {
+      oldPieces = prevPieces;
+      muralTransition(pieces);
+    } else if (document.getElementById('page-mural').classList.contains('active')) {
+      renderMural();
+    }
     break;
   }
 
   case 'gen_selected': {
-    galleryCanvases.forEach(c=>c.classList.remove('selected'));
+    galleryCanvases.forEach(c => c.classList.remove('selected'));
     const {indices} = data;
     if (indices) {
-      indices.forEach(i=>{ if(i<galleryCanvases.length) galleryCanvases[i].classList.add('selected'); });
-      selectedPieces = indices.filter(i=>i<allPieces.length).map(i=>allPieces[i]);
+      indices.forEach(i => { if (i < galleryCanvases.length) galleryCanvases[i].classList.add('selected'); });
+      selectedPieces = indices.filter(i => i < allPieces.length).map(i => allPieces[i]);
     }
     break;
   }
@@ -815,9 +967,9 @@ function handle(event, data) {
   case 'finetune_start': {
     setPhase('finetuning');
     if (selectedPieces.length) {
-      muralMode='kaleidoscope';
-      const btn=document.getElementById('mural-mode-btn');
-      btn.textContent='Kaleidoscope'; btn.classList.add('kaleido');
+      muralMode = 'kaleidoscope';
+      const btn = document.getElementById('mural-mode-btn');
+      btn.textContent = 'Kaleidoscope'; btn.classList.add('kaleido');
     }
     startKaleidoAnim();
     break;
@@ -827,8 +979,8 @@ function handle(event, data) {
   case 'saving_complete': break;
 
   case 'gen_complete': {
-    const s=data.summary;
-    if (s) { document.getElementById('stat-gen').textContent=s.generation; document.getElementById('stat-temp').textContent=s.temperature.toFixed(3); }
+    const s = data.summary;
+    if (s) { document.getElementById('stat-gen').textContent = s.generation; document.getElementById('stat-temp').textContent = s.temperature.toFixed(3); }
     break;
   }
 

@@ -43,14 +43,17 @@ class WebBridge:
         self.port = port
         self._clients: set = set()
         self._loop: asyncio.AbstractEventLoop | None = None
+        self._ready = threading.Event()
 
     def start(self) -> None:
         t = threading.Thread(target=self._run, daemon=True)
         t.start()
+        self._ready.wait(timeout=5)
 
     def _run(self) -> None:
         self._loop = asyncio.new_event_loop()
         asyncio.set_event_loop(self._loop)
+        self._ready.set()
         self._loop.run_until_complete(self._serve())
 
     async def _serve(self) -> None:
@@ -63,7 +66,7 @@ class WebBridge:
         self._clients.add(ws)
         try:
             async for _ in ws:
-                pass  # we don't expect messages from the client
+                pass
         finally:
             self._clients.discard(ws)
 
@@ -75,13 +78,14 @@ class WebBridge:
         if not self._clients or self._loop is None:
             return
         msg = json.dumps({"event": event, "data": _serialize(data)})
-        asyncio.run_coroutine_threadsafe(self._broadcast(msg), self._loop)
+        fut = asyncio.run_coroutine_threadsafe(self._broadcast(msg), self._loop)
+        fut.add_done_callback(lambda f: f.exception() if not f.cancelled() else None)
 
     async def _broadcast(self, msg: str) -> None:
         dead = set()
-        for ws in self._clients:
+        for ws in list(self._clients):  # snapshot to avoid set-changed-during-iteration
             try:
                 await ws.send(msg)
             except Exception:
                 dead.add(ws)
-        self._clients -= dead
+        self._clients.difference_update(dead)  # in-place, no rebind
