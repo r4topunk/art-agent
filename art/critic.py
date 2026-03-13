@@ -234,10 +234,48 @@ def per_image_diversity(grids: list[np.ndarray]) -> list[float]:
 
 
 def _stripe_fraction(grid: np.ndarray) -> float:
-    """Fraction of rows/columns that are uniform (all same color)."""
-    rows_uniform = sum(1 for r in range(grid.shape[0]) if len(np.unique(grid[r, :])) == 1)
-    cols_uniform = sum(1 for c in range(grid.shape[1]) if len(np.unique(grid[:, c])) == 1)
+    """Fraction of rows/columns that are near-uniform (≤2 colors)."""
+    rows_uniform = sum(1 for r in range(grid.shape[0]) if len(np.unique(grid[r, :])) <= 2)
+    cols_uniform = sum(1 for c in range(grid.shape[1]) if len(np.unique(grid[:, c])) <= 2)
     return max(rows_uniform, cols_uniform) / grid.shape[0]
+
+
+def _row_repeat_fraction(grid: np.ndarray) -> float:
+    """Fraction of adjacent rows that are identical (horizontal banding)."""
+    size = grid.shape[0]
+    if size < 2:
+        return 0.0
+    same = sum(1 for r in range(size - 1) if np.array_equal(grid[r], grid[r + 1]))
+    return same / (size - 1)
+
+
+def _motif_repeat_score(grid: np.ndarray) -> float:
+    """Detect short repeating motifs within rows/columns (e.g. 142142142...).
+
+    Returns 0..1 where 1 = every row/col is a repeating motif of period ≤4.
+    """
+    size = grid.shape[0]
+    motif_rows = 0
+    for r in range(size):
+        row = grid[r, :]
+        for period in range(1, 5):  # check periods 1,2,3,4
+            tile = row[:period]
+            repeated = np.tile(tile, (size + period - 1) // period)[:size]
+            if np.sum(row == repeated) >= size - 2:  # allow 2 mismatches
+                motif_rows += 1
+                break
+
+    motif_cols = 0
+    for c in range(size):
+        col = grid[:, c]
+        for period in range(1, 5):
+            tile = col[:period]
+            repeated = np.tile(tile, (size + period - 1) // period)[:size]
+            if np.sum(col == repeated) >= size - 2:
+                motif_cols += 1
+                break
+
+    return max(motif_rows, motif_cols) / size
 
 
 class ArtCritic:
@@ -305,10 +343,22 @@ class ArtCritic:
         if max_region_frac > 0.15:
             gate *= max(0.1, 1.0 - 4.0 * (max_region_frac - 0.15))
 
-        # Stripe penalty: penalize grids with many uniform rows/columns
+        # Stripe penalty: penalize grids with many near-uniform rows/columns
         stripe_frac = _stripe_fraction(grid)
-        if stripe_frac > 0.40:
-            gate *= max(0.1, 1.0 - 3.0 * (stripe_frac - 0.40))
+        if stripe_frac > 0.30:
+            gate *= max(0.05, 1.0 - 3.0 * (stripe_frac - 0.30))
+
+        # Row/column repetition: adjacent identical rows = horizontal bands
+        row_rep = _row_repeat_fraction(grid)
+        col_rep = _row_repeat_fraction(grid.T)
+        band_frac = max(row_rep, col_rep)
+        if band_frac > 0.20:
+            gate *= max(0.05, 1.0 - 3.0 * (band_frac - 0.20))
+
+        # Motif repetition: short repeating patterns within rows (e.g. 142142142...)
+        motif_frac = _motif_repeat_score(grid)
+        if motif_frac > 0.25:
+            gate *= max(0.10, 1.0 - 2.0 * (motif_frac - 0.25))
 
         sym = symmetry_score(grid)
         cplx = complexity_score(grid, n_colors)

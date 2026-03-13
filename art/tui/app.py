@@ -159,7 +159,6 @@ class WallpaperScreen(Screen):
     """Full-screen mural — tiles pieces across the terminal, live generation view."""
     BINDINGS = [
         ("escape", "app.pop_screen", "Back"),
-        ("f", "toggle_view", "Toggle View"),
     ]
 
     def compose(self) -> ComposeResult:
@@ -175,8 +174,6 @@ class WallpaperScreen(Screen):
         if hasattr(app, "_latest_selected_pieces") and app._latest_selected_pieces:
             panel.update_selected_pieces(app._latest_selected_pieces)
 
-    def action_toggle_view(self):
-        self.query_one("#wallpaper-widget", WallpaperWidget).toggle_display_mode()
 
 
 class ArtApp(App):
