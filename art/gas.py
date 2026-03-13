@@ -399,11 +399,12 @@ class GASLoop:
                 img_upscaled.save(gen_dir / "best.png")
 
         # Save 6x6 grid of all generated pieces (no margins) to shared grids folder
-        cell = 1024 // 6  # ~170px per cell, exact 1024x1024 output
-        grid_img = PIL.Image.new("RGB", (1024, 1024), color=(0, 0, 0))
+        cell = 170  # 1020 // 6 = 170 exactly — no black border gap
+        grid_size = cell * 6  # 1020
+        grid_img = PIL.Image.new("RGB", (grid_size, grid_size), color=(0, 0, 0))
         for i, img in enumerate(all_pil[:36]):
-            row, col = divmod(i, 6)
-            x, y = col * cell, row * cell
+            row, col_i = divmod(i, 6)
+            x, y = col_i * cell, row * cell
             grid_img.paste(img.resize((cell, cell), PIL.Image.NEAREST), (x, y))
         grids_dir = self.config.collections_dir / "grids"
         grids_dir.mkdir(parents=True, exist_ok=True)
