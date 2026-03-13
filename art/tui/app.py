@@ -193,6 +193,8 @@ class ArtApp(App):
         resume: bool = True,
         use_vlm: bool = False,
         vlm_model: str = "moondream",
+        web: bool = False,
+        web_port: int = 8765,
     ):
         super().__init__()
         self.generations = generations
@@ -201,6 +203,13 @@ class ArtApp(App):
         self.vlm_model = vlm_model
         self.event_bus = EventBus()
         self.config = ArtConfig()
+
+        if web:
+            from art.web.bridge import WebBridge
+            self._web_bridge = WebBridge(self.event_bus, port=web_port)
+            self._web_bridge.start()
+        else:
+            self._web_bridge = None
         ensure_dirs(self.config)
         self._latest_pieces: list[np.ndarray] = []
         self._latest_scores: list[dict] = []

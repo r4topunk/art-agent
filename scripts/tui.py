@@ -33,6 +33,18 @@ def main():
         default="moondream",
         help="Ollama model name for VLM critic (default: moondream)",
     )
+    parser.add_argument(
+        "--web",
+        default=False,
+        action=argparse.BooleanOptionalAction,
+        help="Start WebSocket bridge for browser visualization (default: False)",
+    )
+    parser.add_argument(
+        "--web-port",
+        type=int,
+        default=8765,
+        help="WebSocket port for --web mode (default: 8765)",
+    )
 
     args = parser.parse_args()
 
@@ -41,6 +53,8 @@ def main():
         resume=args.resume,
         use_vlm=args.vlm,
         vlm_model=args.vlm_model,
+        web=args.web,
+        web_port=args.web_port,
     )
     app.run()
 

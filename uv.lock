@@ -129,6 +129,7 @@ dependencies = [
     { name = "textual" },
     { name = "torch" },
     { name = "torchvision" },
+    { name = "websockets" },
 ]
 
 [package.optional-dependencies]
@@ -154,6 +155,7 @@ requires-dist = [
     { name = "torch", specifier = ">=2.10.0" },
     { name = "torchvision", specifier = ">=0.25.0" },
     { name = "web3", marker = "extra == 'nft'", specifier = ">=7.0.0" },
+    { name = "websockets", specifier = ">=15.0.1" },
 ]
 provides-extras = ["nft"]
 
