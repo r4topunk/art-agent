@@ -14,4 +14,18 @@ export const state = {
   layoutSeed: 0,
   layoutTimer: null,
   rotationTimer: null,
+  // Game of Life
+  gol: {
+    grid: null,
+    cols: 0,
+    rows: 0,
+    tileA: null,
+    tileB: null,
+    tileIdxA: 0,
+    tileIdxB: 0,
+    generation: 0,
+    tickTimer: null,
+    resetTimer: null,
+    running: false,
+  },
 };

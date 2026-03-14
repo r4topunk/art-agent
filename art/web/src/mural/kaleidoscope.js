@@ -16,8 +16,8 @@ export function buildKaleido(pieces, tileSize) {
   for (let gy = 0; gy < hR; gy++)
     for (let gx = 0; gx < hC; gx++) {
       const pi = Math.floor(Math.random() * pool.length);
-      const rot = Math.floor(Math.random() * 4);
-      const flip = Math.random() < 0.5;
+      const rot = state.muralTileRotation ? Math.floor(Math.random() * 4) : 0;
+      const flip = state.muralTileRotation ? Math.random() < 0.5 : false;
       const tile = getCachedTile(pool[pi], 'k' + pi, tileSize, rot, flip);
       qctx.drawImage(tile, gx * tileSize, gy * tileSize);
     }

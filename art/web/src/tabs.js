@@ -1,5 +1,6 @@
+import { state } from './state.js';
 import { renderMural } from './mural/render.js';
-import { startLayoutLoop, startRotationLoop } from './mural/timers.js';
+import { startTimersForMode } from './mural/controls.js';
 
 export function switchTab(name) {
   document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
@@ -7,8 +8,7 @@ export function switchTab(name) {
   document.querySelector(`.tab[data-tab="${name}"]`).classList.add('active');
   document.getElementById(`page-${name}`).classList.add('active');
   if (name === 'mural') {
-    renderMural();
-    startLayoutLoop();
-    startRotationLoop();
+    if (state.muralMode !== 'gameoflife') renderMural();
+    startTimersForMode();
   }
 }

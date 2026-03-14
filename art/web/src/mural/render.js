@@ -1,5 +1,6 @@
 import { buildWallpaper } from './wallpaper.js';
 import { buildKaleido } from './kaleidoscope.js';
+import { buildGameOfLife } from './gameoflife.js';
 import { state } from '../state.js';
 
 let muralCanvas, muralCtx;
@@ -29,9 +30,15 @@ export function renderMural() {
   }
   ctx.imageSmoothingEnabled = false;
   ctx.clearRect(0, 0, W, H);
-  const src = state.muralMode === 'kaleidoscope' && state.selectedPieces.length
-    ? buildKaleido(state.selectedPieces, state.muralTileSize)
-    : buildWallpaper(pieces, state.muralTileSize);
+  let src;
+  if (state.muralMode === 'gameoflife' && state.gol.grid) {
+    src = buildGameOfLife(state.muralTileSize);
+  } else if (state.muralMode === 'kaleidoscope' && state.selectedPieces.length) {
+    src = buildKaleido(state.selectedPieces, state.muralTileSize);
+  } else {
+    src = buildWallpaper(pieces, state.muralTileSize);
+  }
+  if (!src) return;
   const ox = Math.round((W - src.width) / 2);
   const oy = Math.round((H - src.height) / 2);
   ctx.drawImage(src, ox, oy);
