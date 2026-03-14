@@ -1,0 +1,31 @@
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500&family=Playfair+Display:ital,wght@1,400&display=swap');
+
+:root {
+  --bg:       #06060e;
+  --bg2:      #0a0a18;
+  --neon:     #39ff14;
+  --neon2:    rgba(57,255,20,0.12);
+  --neon3:    rgba(57,255,20,0.06);
+  --cyan:     #00e5ff;
+  --pink:     #ff2d78;
+  --amber:    #ffb300;
+  --border:   rgba(57,255,20,0.15);
+  --border2:  rgba(57,255,20,0.07);
+  --text:     rgba(57,255,20,0.55);
+  --text-dim: rgba(57,255,20,0.28);
+  --text-hi:  rgba(57,255,20,0.9);
+  --glow:     0 0 8px rgba(57,255,20,0.4);
+}
+
+* { margin:0; padding:0; box-sizing:border-box; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  font-weight: 300;
+  overflow: hidden;
+  height: 100vh;
+  width: 100vw;
+}

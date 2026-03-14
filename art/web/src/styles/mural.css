@@ -1,0 +1,46 @@
+#page-mural { flex-direction:column; }
+#page-mural.active { display:flex; }
+
+#mural-toolbar {
+  display:flex; align-items:center; gap:14px;
+  padding:7px 18px; flex-shrink:0;
+  border-bottom:1px solid var(--border2);
+  background:rgba(6,6,14,0.97);
+}
+#mural-toolbar .tool-label {
+  font-size:8px; letter-spacing:2px; text-transform:uppercase; color:var(--text-dim);
+}
+.zoom-btn {
+  width:24px; height:24px; border:1px solid var(--border); background:var(--neon3);
+  color:var(--neon); font-size:15px; cursor:pointer;
+  display:flex; align-items:center; justify-content:center;
+  font-family:'JetBrains Mono',monospace;
+  transition:box-shadow .2s;
+}
+.zoom-btn:hover { box-shadow:var(--glow); }
+#zoom-val, #transition-val, #flip-val { font-size:10px; color:var(--text); min-width:36px; text-align:center; font-variant-numeric:tabular-nums; }
+#mural-mode-btn, #mural-rotate-btn {
+  padding:4px 12px; border:1px solid var(--border); background:var(--neon3);
+  color:var(--text-dim); font-size:8px; letter-spacing:2px; text-transform:uppercase;
+  cursor:pointer; font-family:'JetBrains Mono',monospace; transition:color .2s,box-shadow .2s;
+}
+#mural-rotate-btn:hover { color:var(--neon); }
+#mural-rotate-btn.active { color:var(--neon); border-color:var(--neon); box-shadow:var(--glow); }
+#mural-mode-btn:hover { color:var(--neon); }
+#mural-mode-btn.kaleido { color:var(--neon); border-color:var(--neon); box-shadow:var(--glow); }
+#mural-gen-info { font-size:9px; color:var(--text-dim); letter-spacing:1px; }
+#mural-phase {
+  font-family:'Playfair Display',serif; font-style:italic;
+  font-size:11px; color:var(--text-dim); margin-left:auto;
+}
+
+#mural-canvas-wrap {
+  flex:1; overflow:hidden; position:relative;
+  cursor:crosshair; background:#030308;
+}
+#mural-canvas { position:absolute; top:0; left:0; image-rendering:pixelated; }
+#mural-overlay {
+  position:absolute; bottom:14px; left:50%; transform:translateX(-50%);
+  font-size:10px; color:var(--text-dim); letter-spacing:1px;
+  pointer-events:none; white-space:nowrap;
+}

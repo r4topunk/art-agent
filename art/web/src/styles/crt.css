@@ -1,0 +1,33 @@
+body::before, body::after {
+  content: ''; position: fixed; inset: 0;
+  pointer-events: none; z-index: 9999;
+}
+/* scanlines */
+body::before {
+  background: repeating-linear-gradient(
+    to bottom,
+    transparent 0px,
+    transparent 1px,
+    rgba(0,0,0,0.15) 1px,
+    rgba(0,0,0,0.15) 2px
+  );
+  animation: crt-flicker 0.08s infinite;
+}
+/* vignette */
+body::after {
+  background: radial-gradient(ellipse at center, transparent 55%, rgba(0,0,0,0.55) 100%);
+}
+@keyframes crt-flicker {
+  0%   { opacity: 0.96; }
+  50%  { opacity: 1; }
+  100% { opacity: 0.97; }
+}
+/* RGB fringe on content */
+#pages {
+  text-shadow:
+    0.4px 0 0 rgba(255,0,0,0.06),
+   -0.4px 0 0 rgba(0,255,255,0.06);
+}
+/* toggle off */
+body.no-crt::before, body.no-crt::after { display: none; }
+body.no-crt #pages { text-shadow: none; }

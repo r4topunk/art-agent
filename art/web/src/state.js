@@ -1,0 +1,17 @@
+export const state = {
+  lossHistory: [],
+  gradHistory: [],
+  allPieces: [],
+  selectedPieces: [],
+  muralTileSize: 16,
+  muralMode: 'wallpaper',
+  kaleidoRunning: false,
+  kaleidoTimer: null,
+  TRANSITION_MS: 3500,
+  KALEIDO_FLIP_MS: 3500,
+  muralTileRotation: true,
+  muralPaused: false,
+  layoutSeed: 0,
+  layoutTimer: null,
+  rotationTimer: null,
+};
