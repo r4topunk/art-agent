@@ -6,9 +6,14 @@ import { ZOOM_STEPS } from '../constants.js';
 import { renderMural } from '../mural/render.js';
 
 function updateVolDisplay() {
-  const a = state.audio;
   const pct = state.volumePercent ?? 60;
   document.getElementById('vol-val').textContent = pct + '%';
+}
+
+// Keep toolbar sound icon in sync with audio state
+export function syncSoundToolbarBtn() {
+  const btn = document.getElementById('mural-sound-toolbar-btn');
+  if (btn) btn.classList.toggle('active', state.audio.enabled);
 }
 
 // Mode-aware labels for timing controls
@@ -91,11 +96,18 @@ export function wireMuralToolbar(controls) {
   // ── Rotate toggle ──
   $('mural-rotate-btn').addEventListener('click', () => controls.toggleTileRotation());
 
-  // ── Sound toggle ──
+  // ── Sound toggle (settings panel) ──
   $('mural-sound-btn').addEventListener('click', () => {
     toggleSound();
-    const enabled = state.audio.enabled;
-    saveSettings({ soundEnabled: enabled });
+    syncSoundToolbarBtn();
+    saveSettings({ soundEnabled: state.audio.enabled });
+  });
+
+  // ── Sound toggle (toolbar icon) ──
+  $('mural-sound-toolbar-btn').addEventListener('click', () => {
+    toggleSound();
+    syncSoundToolbarBtn();
+    saveSettings({ soundEnabled: state.audio.enabled });
   });
 
   // ── Volume slider ──

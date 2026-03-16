@@ -184,12 +184,14 @@ export function syncToolbarUI() {
   if (volSlider) volSlider.value = state.volumePercent ?? 60;
   document.getElementById('vol-val').textContent = (state.volumePercent ?? 60) + '%';
 
-  // Sound
+  // Sound (settings panel + toolbar icon)
   const soundBtn = document.getElementById('mural-sound-btn');
   if (soundBtn) {
     soundBtn.textContent = state.audio.enabled ? 'ON' : 'OFF';
     soundBtn.classList.toggle('active', state.audio.enabled);
   }
+  const soundToolbarBtn = document.getElementById('mural-sound-toolbar-btn');
+  if (soundToolbarBtn) soundToolbarBtn.classList.toggle('active', state.audio.enabled);
 }
 
 // ── Grid interaction (Game of Life click/drag cell toggle) ──

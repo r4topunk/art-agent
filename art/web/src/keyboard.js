@@ -4,6 +4,7 @@ import { toggleSound, setVolume } from './mural/sonify.js';
 import { saveSettings } from './persist.js';
 import { state } from './state.js';
 import { ZOOM_STEPS } from './constants.js';
+import { syncSoundToolbarBtn } from './dom/mural-toolbar.js';
 
 export function initKeyboard() {
   document.addEventListener('keydown', e => {
@@ -33,6 +34,7 @@ export function initKeyboard() {
       }
       if (e.key === 's' || e.key === 'S') {
         toggleSound();
+        syncSoundToolbarBtn();
         saveSettings({ soundEnabled: state.audio.enabled });
       }
       if (e.key === '[') {

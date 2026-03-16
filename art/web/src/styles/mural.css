@@ -2,28 +2,25 @@
    MURAL PAGE
    ═══════════════════════════════════════════════════ */
 
-#page-mural { flex-direction:column; }
+#page-mural { flex-direction:column; position:relative; }
 #page-mural.active { display:flex; }
 
-/* ── Slim toolbar (always visible) ──────────────── */
+/* ── Floating toolbar ───────────────────────────── */
 
 #mural-toolbar {
-  display:flex; align-items:center; gap:8px;
-  padding:6px 14px; flex-shrink:0;
-  border-bottom:1px solid var(--border2);
-  background:rgba(6,6,14,0.97);
-  min-height:38px;
+  position:absolute; top:12px; left:50%; transform:translateX(-50%);
+  display:flex; align-items:center; gap:6px;
   z-index:10;
+  pointer-events:none;         /* let clicks through gaps */
 }
-
-.toolbar-sep {
-  width:1px; height:18px;
-  background:var(--border); margin:0 4px;
+#mural-toolbar > * {
+  pointer-events:auto;         /* but buttons are clickable */
 }
 
 /* Mode button — primary action */
 #mural-mode-btn {
-  padding:5px 14px; border:1px solid var(--border); background:var(--neon3);
+  padding:6px 16px; border:1px solid var(--border);
+  background:rgba(6,6,14,0.75); backdrop-filter:blur(8px); -webkit-backdrop-filter:blur(8px);
   color:var(--text); font-size:9px; letter-spacing:2px; text-transform:uppercase;
   cursor:pointer; font-family:'JetBrains Mono',monospace;
   transition:color .2s, box-shadow .2s, border-color .2s;
@@ -31,9 +28,10 @@
 #mural-mode-btn:hover { color:var(--neon); }
 #mural-mode-btn.kaleido { color:var(--neon); border-color:var(--neon); box-shadow:var(--glow); }
 
-/* Icon buttons (pause, fullscreen, CRT, settings gear) */
+/* Icon buttons (pause, fullscreen, CRT, sound, settings) */
 .tool-icon-btn {
-  width:32px; height:32px; border:1px solid var(--border); background:var(--neon3);
+  width:32px; height:32px; border:1px solid var(--border);
+  background:rgba(6,6,14,0.75); backdrop-filter:blur(8px); -webkit-backdrop-filter:blur(8px);
   color:var(--text-dim); font-size:14px; cursor:pointer;
   display:flex; align-items:center; justify-content:center;
   font-family:'JetBrains Mono',monospace;
@@ -48,15 +46,20 @@
 /* CRT button — text, smaller font */
 #mural-crt-btn { font-size:8px; letter-spacing:1px; width:auto; padding:0 10px; }
 
+/* Sound button in toolbar */
+#mural-sound-toolbar-btn { font-size:15px; }
+
 /* Settings gear */
 #mural-settings-toggle { font-size:16px; }
 #mural-settings-toggle.open {
   color:var(--neon); border-color:var(--neon); box-shadow:var(--glow);
 }
 
-/* Status cluster — pushed right */
-.toolbar-status {
-  margin-left:auto; display:flex; align-items:center; gap:12px;
+/* Status — floating bottom-left */
+#mural-status {
+  position:absolute; bottom:12px; left:14px;
+  display:flex; align-items:center; gap:12px;
+  z-index:10; pointer-events:none;
 }
 #mural-gen-info { font-size:9px; color:var(--text-dim); letter-spacing:1px; }
 #mural-phase {
@@ -67,17 +70,20 @@
 /* ── Collapsible settings panel ─────────────────── */
 
 #mural-settings {
-  overflow:hidden; flex-shrink:0;
-  background:rgba(6,6,14,0.95);
-  border-bottom:1px solid var(--border2);
-  max-height:300px;
+  position:absolute; top:52px; left:50%; transform:translateX(-50%);
+  z-index:10;
+  overflow:hidden;
+  background:rgba(6,6,14,0.88); backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px);
+  border:1px solid var(--border2); border-radius:4px;
+  max-height:300px; width:min(92vw, 640px);
   transition:max-height .3s ease, padding .3s ease, opacity .25s ease;
-  padding:12px 18px;
+  padding:14px 18px;
   opacity:1;
 }
 #mural-settings.collapsed {
   max-height:0; padding:0 18px; opacity:0;
-  border-bottom-color:transparent;
+  border-color:transparent;
+  pointer-events:none;
 }
 
 .settings-grid {
@@ -164,10 +170,11 @@ input[type="range"]::-moz-range-track {
 
 /* ── Fullscreen: hide chrome ────────────────────── */
 
-body.fullscreen #tab-bar       { display:none; }
-body.fullscreen #mural-toolbar { display:none; }
+body.fullscreen #tab-bar        { display:none; }
+body.fullscreen #mural-toolbar  { display:none; }
 body.fullscreen #mural-settings { display:none; }
-body.fullscreen #pages         { inset:0; }
+body.fullscreen #mural-status   { display:none; }
+body.fullscreen #pages          { inset:0; }
 
 /* ── Canvas area ────────────────────────────────── */
 
@@ -188,10 +195,8 @@ body.fullscreen #pages         { inset:0; }
 
 @media (max-width: 640px) {
 
-  /* Toolbar: tighter spacing */
   #mural-toolbar {
-    padding:6px 10px; gap:6px;
-    min-height:44px;
+    top:8px; gap:5px;
   }
 
   .tool-icon-btn {
@@ -199,19 +204,20 @@ body.fullscreen #pages         { inset:0; }
   }
 
   #mural-crt-btn { font-size:9px; padding:0 8px; height:44px; }
+  #mural-sound-toolbar-btn { font-size:20px; height:44px; }
 
   #mural-mode-btn {
-    padding:8px 12px; font-size:9px;
+    padding:10px 12px; font-size:9px;
   }
 
-  .toolbar-sep { display:none; }
-
-  /* Status: hide gen info, keep phase compact */
+  /* Status */
+  #mural-status { bottom:8px; left:10px; }
   #mural-gen-info { display:none; }
   #mural-phase { font-size:10px; }
 
-  /* Settings panel: full-width stacked layout */
+  /* Settings panel: full-width stacked */
   #mural-settings {
+    top:58px; width:min(96vw, 640px);
     padding:14px 12px;
     max-height:400px;
   }
