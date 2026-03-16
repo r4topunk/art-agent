@@ -77,6 +77,7 @@ export function kaleidoFlipTime(delta) {
       if (state.rotationTimer) { stopRotationLoop(); startRotationLoop(); }
       break;
     case 'gameoflife':
+      state.gol.tickMS = state.KALEIDO_FLIP_MS;
       restartGolTick();
       break;
     // kaleidoscope: KALEIDO_FLIP_MS not used, no-op
@@ -144,6 +145,50 @@ export function syncToolbarUI() {
   const modeBtn = document.getElementById('mural-mode-btn');
   modeBtn.textContent = MODE_LABELS[state.muralMode];
   modeBtn.classList.toggle('kaleido', state.muralMode !== 'wallpaper');
+}
+
+// ── Grid interaction (Game of Life click/drag cell toggle) ──
+
+export function initGridInteraction() {
+  const canvas = document.getElementById('mural-canvas');
+  let painting = false;
+  let paintValue = 0;
+
+  function getCellFromEvent(e) {
+    const { gol } = state;
+    if (!gol.grid) return null;
+    const rect = canvas.getBoundingClientRect();
+    const ts = state.muralTileSize;
+    const wrap = document.getElementById('mural-canvas-wrap');
+    const ox = Math.round((wrap.clientWidth - gol.cols * ts) / 2);
+    const oy = Math.round((wrap.clientHeight - gol.rows * ts) / 2);
+    const col = Math.floor((e.clientX - rect.left - ox) / ts);
+    const row = Math.floor((e.clientY - rect.top - oy) / ts);
+    if (col < 0 || col >= gol.cols || row < 0 || row >= gol.rows) return null;
+    return { col, row };
+  }
+
+  canvas.addEventListener('mousedown', (e) => {
+    if (state.muralMode !== 'gameoflife') return;
+    const cell = getCellFromEvent(e);
+    if (!cell) return;
+    const idx = cell.row * state.gol.cols + cell.col;
+    paintValue = state.gol.grid[idx] ? 0 : 1;
+    state.gol.grid[idx] = paintValue;
+    painting = true;
+    renderMural();
+    e.preventDefault();
+  });
+
+  canvas.addEventListener('mousemove', (e) => {
+    if (!painting || state.muralMode !== 'gameoflife') return;
+    const cell = getCellFromEvent(e);
+    if (!cell) return;
+    state.gol.grid[cell.row * state.gol.cols + cell.col] = paintValue;
+    renderMural();
+  });
+
+  window.addEventListener('mouseup', () => { painting = false; });
 }
 
 // Called from tabs.js when switching to mural page

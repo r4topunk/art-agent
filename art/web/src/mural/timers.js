@@ -2,6 +2,7 @@ import { renderMural } from './render.js';
 import { golInit, golStep } from './gameoflife.js';
 import { clearTileCache } from './cache.js';
 import { state } from '../state.js';
+import { updateFromGrid, stopSound, buildWavetables } from './sonify.js';
 
 function isMuralActive() {
   return document.getElementById('page-mural').classList.contains('active');
@@ -71,6 +72,8 @@ function golRound() {
   }
   clearTileCache();
   golInit();
+  state.gol.tickMS = state.KALEIDO_FLIP_MS;
+  buildWavetables(state.gol.tileA, state.gol.tileB, state.gol.tileIdxA, state.gol.tileIdxB);
   renderMural();
   state.gol.running = true;
   golTick();
@@ -86,8 +89,9 @@ function golTick() {
   if (!state.muralPaused) {
     golStep();
     renderMural();
+    updateFromGrid(state.gol.grid, state.gol.cols, state.gol.rows);
   }
-  state.gol.tickTimer = setTimeout(golTick, state.KALEIDO_FLIP_MS);
+  state.gol.tickTimer = setTimeout(golTick, state.gol.tickMS);
 }
 
 function stopGolTick() {
@@ -103,6 +107,7 @@ export function startGol() {
 export function stopGol() {
   stopGolTick();
   if (state.gol.resetTimer) { clearTimeout(state.gol.resetTimer); state.gol.resetTimer = null; }
+  stopSound();
 }
 
 // Restart just the tick timer with new KALEIDO_FLIP_MS (called when Flip changes)

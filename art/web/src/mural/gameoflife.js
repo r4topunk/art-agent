@@ -1,5 +1,6 @@
 import { getCachedTile } from './cache.js';
 import { state } from '../state.js';
+import { rebuildPitchTable } from './sonify.js';
 
 // Conway's Game of Life at tile resolution on a toroidal grid.
 // Two tiles are picked: tileA = alive, tileB = dead.
@@ -61,6 +62,7 @@ export function golInit() {
 
   state.gol.grid = grid;
   state.gol.generation = 0;
+  rebuildPitchTable(rows);
 }
 
 export function golStep() {

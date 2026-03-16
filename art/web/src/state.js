@@ -30,15 +30,23 @@ export const state = {
     tickTimer: null,
     resetTimer: null,
     running: false,
+    tickMS: 250,
+    scanCol: 0,
   },
   // Audio
   audio: {
     ctx: null,
     enabled: false,
     masterGain: null,
-    voices: [],      // [{osc, gain, pan}] x 8
+    synthBus: null,  // persistent oscillator bank bus
+    grainBus: null,  // birth/death transient bus
+    oscBank: [],     // [{osc, gain, panner}] per row
+    prevGrid: null,  // Uint8Array copy for diff
+    dryGain: null,   // ref for macro modulation
+    wetGain: null,   // ref for macro modulation
     droneOsc: [],    // [{osc, gain}] x 2
     filter: null,
-    scanTimer: null,
+    waveAlive: null, // PeriodicWave for alive-cell oscillators
+    waveDrone: null, // PeriodicWave for drone oscillators
   },
 };
