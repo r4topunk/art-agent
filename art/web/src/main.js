@@ -55,9 +55,6 @@ document.getElementById('mural-canvas-wrap').addEventListener('dblclick', () => 
 // Init keyboard shortcuts
 initKeyboard();
 
-// Wire GoL grid interaction
-controls.initGridInteraction();
-
 // Restore persisted settings
 const _saved = loadSettings();
 controls.syncToolbarUI();
