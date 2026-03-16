@@ -16,6 +16,7 @@ import { initHandlers, handle } from './handlers.js';
 import { renderMural } from './mural/render.js';
 import * as controls from './mural/controls.js';
 import { loadSettings } from './persist.js';
+import { state } from './state.js';
 
 // Build DOM
 const layerCanvases = buildSpine();
@@ -43,13 +44,19 @@ document.addEventListener('fullscreenchange', () => {
   if (document.getElementById('page-mural').classList.contains('active')) renderMural();
 });
 
-// Double-click canvas to toggle fullscreen
+// Double-click canvas to toggle fullscreen (skip in GoL mode — use F key)
 document.getElementById('mural-canvas-wrap').addEventListener('dblclick', () => {
-  if (document.getElementById('page-mural').classList.contains('active')) controls.toggleFullscreen();
+  if (document.getElementById('page-mural').classList.contains('active') &&
+      state.muralMode !== 'gameoflife') {
+    controls.toggleFullscreen();
+  }
 });
 
 // Init keyboard shortcuts
 initKeyboard();
+
+// Wire GoL grid interaction
+controls.initGridInteraction();
 
 // Restore persisted settings
 const _saved = loadSettings();

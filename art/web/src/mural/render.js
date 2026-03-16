@@ -42,4 +42,5 @@ export function renderMural() {
   const ox = Math.round((W - src.width) / 2);
   const oy = Math.round((H - src.height) / 2);
   ctx.drawImage(src, ox, oy);
+
 }

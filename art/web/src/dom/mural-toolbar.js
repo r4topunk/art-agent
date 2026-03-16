@@ -1,4 +1,5 @@
 import { muralZoom } from '../mural/controls.js';
+import { toggleSound } from '../mural/sonify.js';
 
 export function wireMuralToolbar(controls) {
   const $ = (id) => document.getElementById(id);
@@ -12,6 +13,7 @@ export function wireMuralToolbar(controls) {
   $('mural-pause-btn').addEventListener('click', () => controls.toggleMuralPause());
   $('mural-rotate-btn').addEventListener('click', () => controls.toggleTileRotation());
   $('mural-mode-btn').addEventListener('click', () => controls.toggleMuralMode());
+  $('mural-sound-btn').addEventListener('click', () => toggleSound());
 
   $('mural-canvas-wrap').addEventListener('wheel', e => {
     e.preventDefault(); muralZoom(e.deltaY < 0 ? 1 : -1);

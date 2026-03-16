@@ -19,7 +19,7 @@
 }
 .zoom-btn:hover { box-shadow:var(--glow); }
 #zoom-val, #transition-val, #flip-val { font-size:10px; color:var(--text); min-width:36px; text-align:center; font-variant-numeric:tabular-nums; }
-#mural-mode-btn, #mural-rotate-btn {
+#mural-mode-btn, #mural-rotate-btn, #mural-sound-btn {
   padding:4px 12px; border:1px solid var(--border); background:var(--neon3);
   color:var(--text-dim); font-size:8px; letter-spacing:2px; text-transform:uppercase;
   cursor:pointer; font-family:'JetBrains Mono',monospace; transition:color .2s,box-shadow .2s;
@@ -28,6 +28,8 @@
 #mural-rotate-btn.active { color:var(--neon); border-color:var(--neon); box-shadow:var(--glow); }
 #mural-mode-btn:hover { color:var(--neon); }
 #mural-mode-btn.kaleido { color:var(--neon); border-color:var(--neon); box-shadow:var(--glow); }
+#mural-sound-btn:hover { color:var(--neon); }
+#mural-sound-btn.active { color:var(--neon); border-color:var(--neon); box-shadow:var(--glow); }
 #mural-gen-info { font-size:9px; color:var(--text-dim); letter-spacing:1px; }
 #mural-phase {
   font-family:'Playfair Display',serif; font-style:italic;

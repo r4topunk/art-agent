@@ -115,6 +115,15 @@ export function handle(event, data) {
       indices.forEach(i => { if (i < galleryCanvases.length) galleryCanvases[i].classList.add('selected'); });
       state.selectedPieces = indices.filter(i => i < state.allPieces.length).map(i => state.allPieces[i]);
     }
+    const strip = document.getElementById('elite-strip');
+    const count = state.selectedPieces.length;
+    while (strip.children.length < count) {
+      const c = document.createElement('canvas');
+      c.width = 16; c.height = 16;
+      strip.appendChild(c);
+    }
+    while (strip.children.length > count) strip.removeChild(strip.lastChild);
+    for (let i = 0; i < count; i++) drawGrid(strip.children[i], state.selectedPieces[i]);
     break;
   }
 
