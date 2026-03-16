@@ -14,6 +14,7 @@ export const state = {
   KALEIDO_FLIP_MS: _s.KALEIDO_FLIP_MS ?? 3500,
   muralTileRotation: _s.muralTileRotation ?? true,
   muralPaused: _s.muralPaused ?? false,
+  volumePercent: _s.volumePercent ?? 60,
   layoutSeed: 0,
   layoutTimer: null,
   rotationTimer: null,

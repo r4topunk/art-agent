@@ -8,7 +8,7 @@ import './styles/mural.css';
 // Modules
 import { buildSpine } from './dom/spine.js';
 import { buildGallery } from './dom/gallery.js';
-import { wireMuralToolbar } from './dom/mural-toolbar.js';
+import { wireMuralToolbar, updateTimingLabels } from './dom/mural-toolbar.js';
 import { switchTab } from './tabs.js';
 import { initKeyboard } from './keyboard.js';
 import { connect } from './connection.js';
@@ -62,6 +62,19 @@ controls.initGridInteraction();
 const _saved = loadSettings();
 controls.syncToolbarUI();
 if (_saved.crtDisabled) document.body.classList.add('no-crt');
+
+// Sync CRT button state on load
+const crtBtn = document.getElementById('mural-crt-btn');
+if (crtBtn) crtBtn.classList.toggle('active', !document.body.classList.contains('no-crt'));
+
+// Sync timing labels for current mode
+updateTimingLabels();
+
+// Restore persisted volume to audio graph when sound is first enabled
+if (_saved.volumePercent != null) {
+  state.volumePercent = _saved.volumePercent;
+}
+
 switchTab(_saved.activeTab ?? 'main');
 
 // Connect WebSocket

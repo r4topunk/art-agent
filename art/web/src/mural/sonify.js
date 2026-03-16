@@ -269,10 +269,17 @@ export function toggleSound() {
 
   a.enabled = !a.enabled;
   const btn = document.getElementById('mural-sound-btn');
-  if (btn) btn.classList.toggle('active', a.enabled);
+  if (btn) {
+    btn.classList.toggle('active', a.enabled);
+    btn.textContent = a.enabled ? 'ON' : 'OFF';
+  }
 
   if (a.enabled) {
     if (a.ctx.state === 'suspended') a.ctx.resume();
+    // Apply persisted volume
+    if (a.masterGain && state.volumePercent != null) {
+      a.masterGain.gain.value = state.volumePercent / 100;
+    }
     const now = a.ctx.currentTime;
     a.droneOsc.forEach(({ gain }) => {
       gain.gain.cancelScheduledValues(now);
@@ -313,7 +320,10 @@ export function stopSound() {
   if (!a.enabled) return;
   a.enabled = false;
   const btn = document.getElementById('mural-sound-btn');
-  if (btn) btn.classList.remove('active');
+  if (btn) {
+    btn.classList.remove('active');
+    btn.textContent = 'OFF';
+  }
 }
 
 // ── Persistent oscillator bank (2-voice unison per row) ──

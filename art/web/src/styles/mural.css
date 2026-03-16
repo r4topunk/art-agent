@@ -1,45 +1,175 @@
+/* ═══════════════════════════════════════════════════
+   MURAL PAGE
+   ═══════════════════════════════════════════════════ */
+
 #page-mural { flex-direction:column; }
 #page-mural.active { display:flex; }
 
+/* ── Slim toolbar (always visible) ──────────────── */
+
 #mural-toolbar {
-  display:flex; align-items:center; gap:14px;
-  padding:7px 18px; flex-shrink:0;
+  display:flex; align-items:center; gap:8px;
+  padding:6px 14px; flex-shrink:0;
   border-bottom:1px solid var(--border2);
   background:rgba(6,6,14,0.97);
+  min-height:38px;
+  z-index:10;
 }
-#mural-toolbar .tool-label {
-  font-size:8px; letter-spacing:2px; text-transform:uppercase; color:var(--text-dim);
+
+.toolbar-sep {
+  width:1px; height:18px;
+  background:var(--border); margin:0 4px;
 }
-.zoom-btn {
-  width:24px; height:24px; border:1px solid var(--border); background:var(--neon3);
-  color:var(--neon); font-size:15px; cursor:pointer;
-  display:flex; align-items:center; justify-content:center;
-  font-family:'JetBrains Mono',monospace;
-  transition:box-shadow .2s;
+
+/* Mode button — primary action */
+#mural-mode-btn {
+  padding:5px 14px; border:1px solid var(--border); background:var(--neon3);
+  color:var(--text); font-size:9px; letter-spacing:2px; text-transform:uppercase;
+  cursor:pointer; font-family:'JetBrains Mono',monospace;
+  transition:color .2s, box-shadow .2s, border-color .2s;
 }
-.zoom-btn:hover { box-shadow:var(--glow); }
-#zoom-val, #transition-val, #flip-val, #vol-val { font-size:10px; color:var(--text); min-width:36px; text-align:center; font-variant-numeric:tabular-nums; }
-#mural-mode-btn, #mural-rotate-btn, #mural-sound-btn {
-  padding:4px 12px; border:1px solid var(--border); background:var(--neon3);
-  color:var(--text-dim); font-size:8px; letter-spacing:2px; text-transform:uppercase;
-  cursor:pointer; font-family:'JetBrains Mono',monospace; transition:color .2s,box-shadow .2s;
-}
-#mural-rotate-btn:hover { color:var(--neon); }
-#mural-rotate-btn.active { color:var(--neon); border-color:var(--neon); box-shadow:var(--glow); }
 #mural-mode-btn:hover { color:var(--neon); }
 #mural-mode-btn.kaleido { color:var(--neon); border-color:var(--neon); box-shadow:var(--glow); }
-#mural-sound-btn:hover { color:var(--neon); }
-#mural-sound-btn.active { color:var(--neon); border-color:var(--neon); box-shadow:var(--glow); }
+
+/* Icon buttons (pause, fullscreen, CRT, settings gear) */
+.tool-icon-btn {
+  width:32px; height:32px; border:1px solid var(--border); background:var(--neon3);
+  color:var(--text-dim); font-size:14px; cursor:pointer;
+  display:flex; align-items:center; justify-content:center;
+  font-family:'JetBrains Mono',monospace;
+  transition:color .2s, box-shadow .2s, border-color .2s;
+  -webkit-tap-highlight-color:transparent;
+}
+.tool-icon-btn:hover { color:var(--neon); box-shadow:var(--glow); }
+.tool-icon-btn.active {
+  color:var(--neon); border-color:var(--neon); box-shadow:var(--glow);
+}
+
+/* CRT button — text, smaller font */
+#mural-crt-btn { font-size:8px; letter-spacing:1px; width:auto; padding:0 10px; }
+
+/* Settings gear */
+#mural-settings-toggle { font-size:16px; }
+#mural-settings-toggle.open {
+  color:var(--neon); border-color:var(--neon); box-shadow:var(--glow);
+}
+
+/* Status cluster — pushed right */
+.toolbar-status {
+  margin-left:auto; display:flex; align-items:center; gap:12px;
+}
 #mural-gen-info { font-size:9px; color:var(--text-dim); letter-spacing:1px; }
 #mural-phase {
   font-family:'Playfair Display',serif; font-style:italic;
-  font-size:11px; color:var(--text-dim); margin-left:auto;
+  font-size:11px; color:var(--text-dim);
 }
 
-/* Fullscreen: hide chrome, expand canvas area */
-body.fullscreen #tab-bar    { display: none; }
-body.fullscreen #mural-toolbar { display: none; }
-body.fullscreen #pages      { inset: 0; }
+/* ── Collapsible settings panel ─────────────────── */
+
+#mural-settings {
+  overflow:hidden; flex-shrink:0;
+  background:rgba(6,6,14,0.95);
+  border-bottom:1px solid var(--border2);
+  max-height:300px;
+  transition:max-height .3s ease, padding .3s ease, opacity .25s ease;
+  padding:12px 18px;
+  opacity:1;
+}
+#mural-settings.collapsed {
+  max-height:0; padding:0 18px; opacity:0;
+  border-bottom-color:transparent;
+}
+
+.settings-grid {
+  display:grid;
+  grid-template-columns:repeat(3, 1fr);
+  gap:16px;
+}
+
+/* Section groups */
+.settings-group {
+  display:flex; flex-direction:column; gap:8px;
+}
+
+.group-title {
+  font-size:8px; letter-spacing:3px; text-transform:uppercase;
+  color:var(--text-dim); padding-bottom:4px;
+  border-bottom:1px solid var(--border2);
+}
+
+/* Individual setting rows */
+.setting-row {
+  display:flex; align-items:center; justify-content:space-between;
+  gap:10px; min-height:32px; cursor:default;
+}
+
+.setting-label {
+  font-size:10px; color:var(--text-dim); letter-spacing:1px;
+  white-space:nowrap; flex-shrink:0;
+}
+
+.setting-control {
+  display:flex; align-items:center; gap:8px;
+  flex:1; justify-content:flex-end;
+}
+
+.setting-value {
+  font-size:10px; color:var(--text); min-width:36px;
+  text-align:right; font-variant-numeric:tabular-nums;
+}
+
+/* ── Toggle buttons ─────────────────────────────── */
+
+.toggle-btn {
+  padding:4px 12px; border:1px solid var(--border); background:var(--neon3);
+  color:var(--text-dim); font-size:8px; letter-spacing:2px; text-transform:uppercase;
+  cursor:pointer; font-family:'JetBrains Mono',monospace;
+  transition:color .2s, box-shadow .2s, border-color .2s;
+  -webkit-tap-highlight-color:transparent;
+  min-height:28px;
+}
+.toggle-btn:hover { color:var(--neon); }
+.toggle-btn.active {
+  color:var(--neon); border-color:var(--neon); box-shadow:var(--glow);
+}
+
+/* ── Range sliders ──────────────────────────────── */
+
+input[type="range"] {
+  -webkit-appearance:none; appearance:none;
+  width:100%; max-width:120px; height:4px;
+  background:var(--border); border-radius:2px; outline:none;
+  cursor:pointer;
+}
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance:none; appearance:none;
+  width:14px; height:14px; border-radius:50%;
+  background:var(--neon); border:2px solid var(--bg);
+  box-shadow:0 0 6px rgba(57,255,20,0.4);
+  cursor:pointer;
+  transition:box-shadow .2s;
+}
+input[type="range"]::-webkit-slider-thumb:hover {
+  box-shadow:0 0 12px rgba(57,255,20,0.7);
+}
+input[type="range"]::-moz-range-thumb {
+  width:14px; height:14px; border-radius:50%;
+  background:var(--neon); border:2px solid var(--bg);
+  box-shadow:0 0 6px rgba(57,255,20,0.4);
+  cursor:pointer;
+}
+input[type="range"]::-moz-range-track {
+  height:4px; background:var(--border); border-radius:2px;
+}
+
+/* ── Fullscreen: hide chrome ────────────────────── */
+
+body.fullscreen #tab-bar       { display:none; }
+body.fullscreen #mural-toolbar { display:none; }
+body.fullscreen #mural-settings { display:none; }
+body.fullscreen #pages         { inset:0; }
+
+/* ── Canvas area ────────────────────────────────── */
 
 #mural-canvas-wrap {
   flex:1; overflow:hidden; position:relative;
@@ -50,4 +180,83 @@ body.fullscreen #pages      { inset: 0; }
   position:absolute; bottom:14px; left:50%; transform:translateX(-50%);
   font-size:10px; color:var(--text-dim); letter-spacing:1px;
   pointer-events:none; white-space:nowrap;
+}
+
+/* ═══════════════════════════════════════════════════
+   RESPONSIVE — MOBILE (< 640px)
+   ═══════════════════════════════════════════════════ */
+
+@media (max-width: 640px) {
+
+  /* Toolbar: tighter spacing */
+  #mural-toolbar {
+    padding:6px 10px; gap:6px;
+    min-height:44px;
+  }
+
+  .tool-icon-btn {
+    width:44px; height:44px; font-size:18px;
+  }
+
+  #mural-crt-btn { font-size:9px; padding:0 8px; height:44px; }
+
+  #mural-mode-btn {
+    padding:8px 12px; font-size:9px;
+  }
+
+  .toolbar-sep { display:none; }
+
+  /* Status: hide gen info, keep phase compact */
+  #mural-gen-info { display:none; }
+  #mural-phase { font-size:10px; }
+
+  /* Settings panel: full-width stacked layout */
+  #mural-settings {
+    padding:14px 12px;
+    max-height:400px;
+  }
+  #mural-settings.collapsed {
+    max-height:0; padding:0 12px;
+  }
+
+  .settings-grid {
+    grid-template-columns:1fr;
+    gap:14px;
+  }
+
+  .setting-row {
+    min-height:44px;
+  }
+
+  input[type="range"] {
+    max-width:none;
+    height:6px;
+  }
+  input[type="range"]::-webkit-slider-thumb {
+    width:22px; height:22px;
+  }
+  input[type="range"]::-moz-range-thumb {
+    width:22px; height:22px;
+  }
+
+  .toggle-btn {
+    min-height:36px; padding:6px 16px; font-size:9px;
+  }
+
+  .setting-label { font-size:11px; }
+  .setting-value { font-size:11px; min-width:42px; }
+}
+
+/* ═══════════════════════════════════════════════════
+   RESPONSIVE — TABLET (641px – 900px)
+   ═══════════════════════════════════════════════════ */
+
+@media (min-width: 641px) and (max-width: 900px) {
+  .settings-grid {
+    grid-template-columns:repeat(2, 1fr);
+  }
+
+  .tool-icon-btn {
+    width:36px; height:36px;
+  }
 }

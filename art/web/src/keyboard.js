@@ -2,6 +2,8 @@ import { switchTab } from './tabs.js';
 import { toggleMuralPause, toggleFullscreen, muralZoom } from './mural/controls.js';
 import { toggleSound, setVolume } from './mural/sonify.js';
 import { saveSettings } from './persist.js';
+import { state } from './state.js';
+import { ZOOM_STEPS } from './constants.js';
 
 export function initKeyboard() {
   document.addEventListener('keydown', e => {
@@ -14,17 +16,44 @@ export function initKeyboard() {
     }
     if (e.key === 'c' || e.key === 'C') {
       document.body.classList.toggle('no-crt');
-      saveSettings({ crtDisabled: document.body.classList.contains('no-crt') });
+      const isOff = document.body.classList.contains('no-crt');
+      const crtBtn = document.getElementById('mural-crt-btn');
+      if (crtBtn) crtBtn.classList.toggle('active', !isOff);
+      saveSettings({ crtDisabled: isOff });
     }
     if ((e.key === 'f' || e.key === 'F') && document.getElementById('page-mural').classList.contains('active')) {
       toggleFullscreen();
     }
     if (document.getElementById('page-mural').classList.contains('active')) {
-      if (e.key === '+' || e.key === '=') muralZoom(+1);
-      if (e.key === '-') muralZoom(-1);
-      if (e.key === 's' || e.key === 'S') toggleSound();
-      if (e.key === '[') setVolume(-0.1);
-      if (e.key === ']') setVolume(+0.1);
+      if (e.key === '+' || e.key === '=') {
+        muralZoom(+1);
+      }
+      if (e.key === '-') {
+        muralZoom(-1);
+      }
+      if (e.key === 's' || e.key === 'S') {
+        toggleSound();
+        saveSettings({ soundEnabled: state.audio.enabled });
+      }
+      if (e.key === '[') {
+        setVolume(-0.1);
+        syncVolumeUI();
+      }
+      if (e.key === ']') {
+        setVolume(+0.1);
+        syncVolumeUI();
+      }
     }
   });
+}
+
+function syncVolumeUI() {
+  const a = state.audio;
+  if (!a.ctx || !a.masterGain) return;
+  const pct = Math.round(a.masterGain.gain.value * 100);
+  state.volumePercent = pct;
+  document.getElementById('vol-val').textContent = pct + '%';
+  const slider = document.getElementById('range-volume');
+  if (slider) slider.value = pct;
+  saveSettings({ volumePercent: pct });
 }
