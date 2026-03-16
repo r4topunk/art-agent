@@ -36,6 +36,17 @@ window.addEventListener('resize', () => {
   if (document.getElementById('page-mural').classList.contains('active')) renderMural();
 });
 
+// Fullscreen: sync body class + re-render mural to fill new dimensions
+document.addEventListener('fullscreenchange', () => {
+  document.body.classList.toggle('fullscreen', !!document.fullscreenElement);
+  if (document.getElementById('page-mural').classList.contains('active')) renderMural();
+});
+
+// Double-click canvas to toggle fullscreen
+document.getElementById('mural-canvas-wrap').addEventListener('dblclick', () => {
+  if (document.getElementById('page-mural').classList.contains('active')) controls.toggleFullscreen();
+});
+
 // Init keyboard shortcuts
 initKeyboard();
 

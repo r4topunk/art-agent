@@ -97,6 +97,16 @@ export function toggleTileRotation() {
   renderMural();
 }
 
+// ── Fullscreen ──
+
+export function toggleFullscreen() {
+  if (!document.fullscreenElement) {
+    document.documentElement.requestFullscreen().catch(() => {});
+  } else {
+    document.exitFullscreen();
+  }
+}
+
 // ── Mode toggle ──
 
 const MODES = ['wallpaper', 'kaleidoscope', 'gameoflife'];

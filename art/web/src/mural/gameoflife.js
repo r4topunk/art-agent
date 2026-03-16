@@ -14,22 +14,25 @@ export function golInit() {
   const cols = Math.ceil(W / ts) + 1;
   const rows = Math.ceil(H / ts) + 1;
 
-  // Pick 2 random visually distinct tiles
+  // Pick 2 tiles with different visual content (fingerprint = sum of all pixel values)
+  function fp(piece) {
+    let s = 0;
+    for (let r = 0; r < piece.length; r++)
+      for (let c = 0; c < piece[r].length; c++) s += piece[r][c];
+    return s;
+  }
+
   const idxA = Math.floor(Math.random() * pieces.length);
-  let idxB = -1;
-  // Try to find a tile with different pixel content
-  const keyA = JSON.stringify(pieces[idxA]);
-  for (let attempt = 0; attempt < 20; attempt++) {
-    const candidate = Math.floor(Math.random() * pieces.length);
-    if (candidate !== idxA && JSON.stringify(pieces[candidate]) !== keyA) {
-      idxB = candidate;
-      break;
-    }
+  const fpA = fp(pieces[idxA]);
+
+  // Collect all candidates with a different fingerprint, then pick randomly
+  const candidates = [];
+  for (let i = 0; i < pieces.length; i++) {
+    if (i !== idxA && fp(pieces[i]) !== fpA) candidates.push(i);
   }
-  // Fallback: just pick a different index
-  if (idxB === -1) {
-    idxB = (idxA + 1) % pieces.length;
-  }
+  const idxB = candidates.length > 0
+    ? candidates[Math.floor(Math.random() * candidates.length)]
+    : (idxA + 1) % pieces.length;
   state.gol.tileA = pieces[idxA];
   state.gol.tileB = pieces[idxB];
   state.gol.tileIdxA = idxA;
