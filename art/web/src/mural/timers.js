@@ -72,12 +72,8 @@ function golRound() {
   clearTileCache();
   golInit();
   renderMural();
-  // Wait 1s then start stepping
-  state.gol.running = false;
-  state.gol.tickTimer = setTimeout(() => {
-    state.gol.running = true;
-    golTick();
-  }, 1000);
+  state.gol.running = true;
+  golTick();
   // Schedule next round (new tile combo)
   state.gol.resetTimer = setTimeout(() => {
     stopGolTick();

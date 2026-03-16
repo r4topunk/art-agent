@@ -14,6 +14,11 @@ wheels/
 
 # Data (generated at runtime)
 data/
+data_*/
+bkp_data/
+
+# Backup files
+*.bak
 
 # PyTorch checkpoints
 *.pt

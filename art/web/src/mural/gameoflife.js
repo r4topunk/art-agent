@@ -14,10 +14,22 @@ export function golInit() {
   const cols = Math.ceil(W / ts) + 1;
   const rows = Math.ceil(H / ts) + 1;
 
-  // Pick 2 random distinct tiles
+  // Pick 2 random visually distinct tiles
   const idxA = Math.floor(Math.random() * pieces.length);
-  let idxB = Math.floor(Math.random() * (pieces.length - 1));
-  if (idxB >= idxA) idxB++;
+  let idxB = -1;
+  // Try to find a tile with different pixel content
+  const keyA = JSON.stringify(pieces[idxA]);
+  for (let attempt = 0; attempt < 20; attempt++) {
+    const candidate = Math.floor(Math.random() * pieces.length);
+    if (candidate !== idxA && JSON.stringify(pieces[candidate]) !== keyA) {
+      idxB = candidate;
+      break;
+    }
+  }
+  // Fallback: just pick a different index
+  if (idxB === -1) {
+    idxB = (idxA + 1) % pieces.length;
+  }
   state.gol.tileA = pieces[idxA];
   state.gol.tileB = pieces[idxB];
   state.gol.tileIdxA = idxA;
