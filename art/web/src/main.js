@@ -15,6 +15,7 @@ import { connect } from './connection.js';
 import { initHandlers, handle } from './handlers.js';
 import { renderMural } from './mural/render.js';
 import * as controls from './mural/controls.js';
+import { loadSettings } from './persist.js';
 
 // Build DOM
 const layerCanvases = buildSpine();
@@ -49,6 +50,12 @@ document.getElementById('mural-canvas-wrap').addEventListener('dblclick', () => 
 
 // Init keyboard shortcuts
 initKeyboard();
+
+// Restore persisted settings
+const _saved = loadSettings();
+controls.syncToolbarUI();
+if (_saved.crtDisabled) document.body.classList.add('no-crt');
+switchTab(_saved.activeTab ?? 'main');
 
 // Connect WebSocket
 connect(handle);

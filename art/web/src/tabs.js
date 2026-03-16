@@ -1,8 +1,10 @@
 import { state } from './state.js';
 import { renderMural } from './mural/render.js';
 import { startTimersForMode } from './mural/controls.js';
+import { saveSettings } from './persist.js';
 
 export function switchTab(name) {
+  saveSettings({ activeTab: name });
   document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.querySelector(`.tab[data-tab="${name}"]`).classList.add('active');

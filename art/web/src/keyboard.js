@@ -1,5 +1,7 @@
 import { switchTab } from './tabs.js';
 import { toggleMuralPause, toggleFullscreen, muralZoom } from './mural/controls.js';
+import { toggleSound, setVolume } from './mural/sonify.js';
+import { saveSettings } from './persist.js';
 
 export function initKeyboard() {
   document.addEventListener('keydown', e => {
@@ -12,6 +14,7 @@ export function initKeyboard() {
     }
     if (e.key === 'c' || e.key === 'C') {
       document.body.classList.toggle('no-crt');
+      saveSettings({ crtDisabled: document.body.classList.contains('no-crt') });
     }
     if ((e.key === 'f' || e.key === 'F') && document.getElementById('page-mural').classList.contains('active')) {
       toggleFullscreen();
@@ -19,6 +22,9 @@ export function initKeyboard() {
     if (document.getElementById('page-mural').classList.contains('active')) {
       if (e.key === '+' || e.key === '=') muralZoom(+1);
       if (e.key === '-') muralZoom(-1);
+      if (e.key === 's' || e.key === 'S') toggleSound();
+      if (e.key === '[') setVolume(-0.1);
+      if (e.key === ']') setVolume(+0.1);
     }
   });
 }
