@@ -1,3 +1,6 @@
+import { state } from './state.js';
+import { syncToolbarUI } from './mural/controls.js';
+
 export function connect(handler) {
   // On HTTPS, ws:// is blocked (mixed content). Skip straight to static data.
   if (location.protocol === 'https:') {
@@ -32,7 +35,6 @@ export function connect(handler) {
       }
     };
   } catch (_) {
-    // SecurityError or other — fallback to static
     loadStaticPieces(handler);
   }
 }
@@ -43,15 +45,19 @@ async function loadStaticPieces(handler) {
   if (staticLoaded) return;
   staticLoaded = true;
 
-  // Offline mode: hide Neural tab, go straight to mural
-  const neuralTab = document.querySelector('.tab[data-tab="main"]');
-  if (neuralTab) neuralTab.style.display = 'none';
+  // Offline mode: hide tab bar, expand page area
+  const tabBar = document.getElementById('tab-bar');
+  if (tabBar) tabBar.style.display = 'none';
+  const pages = document.getElementById('pages');
+  if (pages) pages.style.inset = '0';
+
+  // Default to Game of Life mode
+  state.muralMode = 'gameoflife';
+  syncToolbarUI();
+
+  // Activate mural tab
   const muralTab = document.querySelector('.tab[data-tab="mural"]');
   if (muralTab) muralTab.click();
-
-  // Hide connection indicator
-  const conn = document.getElementById('conn');
-  if (conn) conn.style.display = 'none';
 
   try {
     const resp = await fetch('/data/pieces.json');

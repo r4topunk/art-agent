@@ -18,7 +18,7 @@
   transition:box-shadow .2s;
 }
 .zoom-btn:hover { box-shadow:var(--glow); }
-#zoom-val, #transition-val, #flip-val { font-size:10px; color:var(--text); min-width:36px; text-align:center; font-variant-numeric:tabular-nums; }
+#zoom-val, #transition-val, #flip-val, #vol-val { font-size:10px; color:var(--text); min-width:36px; text-align:center; font-variant-numeric:tabular-nums; }
 #mural-mode-btn, #mural-rotate-btn, #mural-sound-btn {
   padding:4px 12px; border:1px solid var(--border); background:var(--neon3);
   color:var(--text-dim); font-size:8px; letter-spacing:2px; text-transform:uppercase;
