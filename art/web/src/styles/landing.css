@@ -1,0 +1,182 @@
+/* ── Landing / Welcome Screen ── */
+
+#landing {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: var(--bg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'JetBrains Mono', monospace;
+  overflow-y: auto;
+}
+
+#landing.hidden {
+  display: none;
+}
+
+.landing-inner {
+  max-width: 620px;
+  width: 90%;
+  padding: 48px 0;
+}
+
+/* Language toggle */
+.lang-toggle {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 40px;
+  justify-content: center;
+}
+
+.lang-btn {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  font-family: inherit;
+  font-size: 10px;
+  font-weight: 400;
+  letter-spacing: 0.08em;
+  padding: 4px 14px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-transform: uppercase;
+}
+
+.lang-btn:first-child { border-radius: 3px 0 0 3px; }
+.lang-btn:last-child  { border-radius: 0 3px 3px 0; }
+
+.lang-btn.active {
+  background: rgba(57, 255, 20, 0.08);
+  color: var(--text-hi);
+  border-color: rgba(57, 255, 20, 0.35);
+}
+
+/* Title */
+.landing-title {
+  font-family: 'Playfair Display', serif;
+  font-style: italic;
+  font-weight: 400;
+  font-size: 42px;
+  color: var(--neon);
+  text-align: center;
+  margin-bottom: 8px;
+  text-shadow: var(--glow);
+  letter-spacing: -0.02em;
+}
+
+.landing-subtitle {
+  text-align: center;
+  font-size: 11px;
+  color: var(--text-dim);
+  margin-bottom: 40px;
+  font-weight: 300;
+  letter-spacing: 0.04em;
+}
+
+/* Description */
+.landing-desc {
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 300;
+  line-height: 1.8;
+  margin-bottom: 36px;
+  text-align: center;
+  padding: 0 10px;
+}
+
+/* Shortcuts */
+.landing-shortcuts-title {
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  text-align: center;
+  margin-bottom: 16px;
+}
+
+.shortcuts-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px 24px;
+  margin-bottom: 44px;
+  padding: 0 10px;
+}
+
+.shortcut-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 11px;
+  font-weight: 300;
+}
+
+.shortcut-key {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 28px;
+  height: 24px;
+  padding: 0 6px;
+  background: rgba(57, 255, 20, 0.06);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  color: var(--text-hi);
+  font-size: 10px;
+  font-weight: 400;
+  font-family: inherit;
+  flex-shrink: 0;
+}
+
+.shortcut-label {
+  color: var(--text-dim);
+}
+
+/* Start button */
+.landing-start-wrap {
+  text-align: center;
+}
+
+#landing-start {
+  background: transparent;
+  border: 1px solid rgba(57, 255, 20, 0.35);
+  color: var(--neon);
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 400;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  padding: 14px 56px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+#landing-start:hover {
+  background: rgba(57, 255, 20, 0.08);
+  border-color: rgba(57, 255, 20, 0.6);
+  box-shadow: var(--glow), inset 0 0 20px rgba(57, 255, 20, 0.05);
+}
+
+#landing-start:active {
+  transform: scale(0.98);
+}
+
+.landing-note {
+  text-align: center;
+  margin-top: 16px;
+  font-size: 10px;
+  color: var(--text-dim);
+  font-weight: 300;
+  opacity: 0.6;
+}
+
+/* Responsive */
+@media (max-width: 500px) {
+  .landing-title { font-size: 30px; }
+  .shortcuts-grid { grid-template-columns: 1fr; }
+  #landing-start { padding: 12px 40px; font-size: 13px; }
+}
