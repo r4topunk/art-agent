@@ -6,7 +6,7 @@ export const state = {
   gradHistory: [],
   allPieces: [],
   selectedPieces: [],
-  muralTileSize: _s.muralTileSize ?? 16,
+  muralTileSize: 16,  // always reset to safe default — small tiles freeze on init
   muralMode: _s.muralMode ?? 'wallpaper',
   kaleidoRunning: false,
   kaleidoTimer: null,
