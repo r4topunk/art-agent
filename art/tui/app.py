@@ -20,7 +20,6 @@ from art.tui.widgets.heartbeat import HeartbeatWidget
 from art.tui.widgets.timeline import TimelineWidget
 from art.tui.widgets.review import ReviewGrid, DetailPanel
 from art.tui.widgets.genwatch import GenWatchPanel
-from art.tui.widgets.wallpaper import WallpaperWidget
 from art.tui.widgets.log import SystemLog
 from art.tui import audio
 
@@ -38,7 +37,7 @@ class StatusBar(Static):
     def __init__(self):
         super().__init__("")
         self._status = "Initializing..."
-        self._keys = "[D]ash [G]en Watch [R]eview [M]ural [Q]uit"
+        self._keys = "[D]ash [G]en Watch [R]eview [Q]uit"
 
     def update_status(self, text: str):
         self._status = text
@@ -155,26 +154,6 @@ class GenerationScreen(Screen):
                 panel.update_selected(app._latest_selected_indices)
 
 
-class WallpaperScreen(Screen):
-    """Full-screen mural — tiles pieces across the terminal, live generation view."""
-    BINDINGS = [
-        ("escape", "app.pop_screen", "Back"),
-    ]
-
-    def compose(self) -> ComposeResult:
-        yield WallpaperWidget(id="wallpaper-widget")
-
-    def on_mount(self):
-        app = self.app
-        panel = self.query_one("#wallpaper-widget", WallpaperWidget)
-        if hasattr(app, "_current_gen"):
-            panel._generation = app._current_gen
-        if app._latest_pieces:
-            panel.update_scored(app._latest_pieces, app._latest_scores)
-        if hasattr(app, "_latest_selected_pieces") and app._latest_selected_pieces:
-            panel.update_selected_pieces(app._latest_selected_pieces)
-
-
 
 class ArtApp(App):
     CSS = APP_CSS
@@ -183,7 +162,6 @@ class ArtApp(App):
         ("d", "switch_dashboard", "Dashboard"),
         ("g", "switch_genwatch", "Gen Watch"),
         ("r", "switch_review", "Review"),
-        ("m", "switch_mural", "Mural"),
         ("q", "quit", "Quit"),
     ]
 
@@ -210,7 +188,6 @@ class ArtApp(App):
         self._latest_pieces: list[np.ndarray] = []
         self._latest_scores: list[dict] = []
         self._latest_selected_indices: list[int] = []
-        self._latest_selected_pieces: list[np.ndarray] = []
         self._latest_confidences: np.ndarray | None = None
         self._train_total_steps: int = 0
         self._human_picks: list[int] | None = None  # set by review confirm
@@ -281,9 +258,6 @@ class ArtApp(App):
     def _on_train_step(self, step: int, loss: float, lr: float, grad_norm: float = 0.0):
         if step % 5 == 0:
             self.call_from_thread(self._u_train_step, step, loss, lr, grad_norm)
-        # Forward finetune progress to mural
-        if getattr(self, "_is_finetuning", False) and step % 5 == 0:
-            self.call_from_thread(self._mural_finetune_step, step)
 
     def _u_train_step(self, step: int, loss: float, lr: float, grad_norm: float):
         try:
@@ -594,11 +568,8 @@ class ArtApp(App):
 
     def _on_gen_selected(self, selected: list, indices: list[int]):
         self._latest_selected_indices = indices
-        if self._latest_pieces:
-            self._latest_selected_pieces = [self._latest_pieces[i] for i in indices if i < len(self._latest_pieces)]
         self.call_from_thread(self._u_gen_selected, indices)
         self.call_from_thread(self._genwatch_call, "update_selected", indices)
-        self.call_from_thread(self._mural_selected_pieces)
 
     def _u_gen_selected(self, indices: list[int]):
         try:
@@ -606,13 +577,6 @@ class ArtApp(App):
         except Exception:
             pass
         self._log("SELECT", "gas", f"selected {len(indices)} pieces — indices: {indices[:8]}{'...' if len(indices) > 8 else ''}")
-
-    def _mural_selected_pieces(self):
-        try:
-            if isinstance(self.screen, WallpaperScreen):
-                self.screen.query_one("#wallpaper-widget", WallpaperWidget).update_selected_pieces(self._latest_selected_pieces)
-        except Exception:
-            pass
 
     def _on_gen_complete(self, summary: dict):
         self.call_from_thread(self._u_gen_complete, summary)
@@ -668,21 +632,6 @@ class ArtApp(App):
                 getattr(panel, method)(*args)
         except Exception:
             pass
-        # Also forward to WallpaperWidget if the mural screen is active
-        try:
-            if isinstance(self.screen, WallpaperScreen):
-                panel = self.screen.query_one("#wallpaper-widget", WallpaperWidget)
-                getattr(panel, method)(*args)
-        except Exception:
-            pass
-
-    def _mural_finetune_step(self, step: int):
-        try:
-            if isinstance(self.screen, WallpaperScreen):
-                panel = self.screen.query_one("#wallpaper-widget", WallpaperWidget)
-                panel.update_finetune(step, self._train_total_steps)
-        except Exception:
-            pass
 
     def _consume_human_picks(self) -> list[int] | None:
         """Called by the runner each generation to collect human picks."""
@@ -715,13 +664,6 @@ class ArtApp(App):
         if not isinstance(self.screen, DashboardScreen):
             self.pop_screen()
         self.push_screen(GenerationScreen())
-
-    def action_switch_mural(self):
-        if isinstance(self.screen, WallpaperScreen):
-            return
-        if not isinstance(self.screen, DashboardScreen):
-            self.pop_screen()
-        self.push_screen(WallpaperScreen())
 
     def action_switch_review(self):
         if not self._latest_pieces or not self._latest_scores:

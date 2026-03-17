@@ -17,6 +17,7 @@ data/
 !art/web/public/data/
 data_*/
 bkp_data/
+images/archive/
 
 # Backup files
 *.bak
