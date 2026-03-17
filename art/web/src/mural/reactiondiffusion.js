@@ -62,14 +62,22 @@ function simulate(u, v, cols, rows, f, k, steps, bilateral) {
   // If result ended in temp buffer, copy back
   if (cur === 1) { u.set(uTmp); v.set(vTmp); }
 
-  // Force bilateral symmetry (left → right mirror)
+  // Force 4-quadrant kaleidoscope symmetry (top-left → all quadrants)
   if (bilateral) {
     const halfC = Math.ceil(cols / 2);
-    for (let r = 0; r < rows; r++) {
+    const halfR = Math.ceil(rows / 2);
+    for (let r = 0; r < halfR; r++) {
+      const mr = rows - 1 - r;
       for (let c = 0; c < halfC; c++) {
         const mc = cols - 1 - c;
-        u[r * cols + mc] = u[r * cols + c];
-        v[r * cols + mc] = v[r * cols + c];
+        const val_u = u[r * cols + c];
+        const val_v = v[r * cols + c];
+        u[r * cols + mc] = val_u;
+        v[r * cols + mc] = val_v;
+        u[mr * cols + c] = val_u;
+        v[mr * cols + c] = val_v;
+        u[mr * cols + mc] = val_u;
+        v[mr * cols + mc] = val_v;
       }
     }
   }
@@ -125,12 +133,13 @@ export function rdInit() {
   const presetIdx = Math.floor(Math.random() * RD_PRESETS.length);
   const bilateral = true; // RD is always bilateral (Rorschach)
 
-  // Seed V: circular patches of chemical V
+  // Seed V: circular patches in top-left quadrant, mirrored to all 4
   const seedCols = bilateral ? Math.ceil(cols / 2) : cols;
+  const seedRows = bilateral ? Math.ceil(rows / 2) : rows;
   const nSeeds = 3 + Math.floor(Math.random() * 5);
   for (let s = 0; s < nSeeds; s++) {
     const cx = Math.floor(Math.random() * seedCols * 0.6 + seedCols * 0.2);
-    const cy = Math.floor(Math.random() * rows * 0.6 + rows * 0.2);
+    const cy = Math.floor(Math.random() * seedRows * 0.6 + seedRows * 0.2);
     const radius = 2 + Math.floor(Math.random() * 3);
     for (let dr = -radius; dr <= radius; dr++) {
       for (let dc = -radius; dc <= radius; dc++) {
@@ -138,12 +147,19 @@ export function rdInit() {
         const r = (cy + dr + rows) % rows;
         const c = (cx + dc + cols) % cols;
         const idx = r * cols + c;
-        u[idx] = 0.5;
-        v[idx] = 0.25 + Math.random() * 0.05;
+        const uVal = 0.5;
+        const vVal = 0.25 + Math.random() * 0.05;
+        u[idx] = uVal;
+        v[idx] = vVal;
         if (bilateral) {
           const mc = cols - 1 - c;
-          u[r * cols + mc] = u[idx];
-          v[r * cols + mc] = v[idx];
+          const mr = rows - 1 - r;
+          u[r * cols + mc] = uVal;
+          v[r * cols + mc] = vVal;
+          u[mr * cols + c] = uVal;
+          v[mr * cols + c] = vVal;
+          u[mr * cols + mc] = uVal;
+          v[mr * cols + mc] = vVal;
         }
       }
     }
