@@ -1,6 +1,6 @@
 import { ZOOM_STEPS } from '../constants.js';
 import { state } from '../state.js';
-import { renderMural } from './render.js';
+import { renderMural, startCrossfade } from './render.js';
 import { clearTileCache } from './cache.js';
 import { saveSettings } from '../persist.js';
 import {
@@ -144,6 +144,7 @@ export function toggleMuralMode() {
 
 // Restart GoL (used when variant changes)
 export function restartGol() {
+  startCrossfade(300);
   stopGol();
   startGol();
 }

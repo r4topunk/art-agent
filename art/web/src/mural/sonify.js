@@ -328,7 +328,7 @@ export function stopSound() {
 
 // ── Persistent oscillator bank (2-voice unison per row) ──
 
-function fadeOutOscBank(durationSec = 0.4) {
+function fadeOutOscBank(durationSec = 0.8) {
   const a = state.audio;
   if (!a.oscBank.length || !a.ctx) return;
   const now = a.ctx.currentTime;
@@ -717,7 +717,17 @@ export function buildWavetables(tileA, tileB, tileIdxA = 0, tileIdxB = 0) {
   const contrast = Math.min(1, statsB.std / 3.5);
 
   const scaleCount = SCALES.length;
-  const scaleIdx = ((tileIdxA * 7 + tileIdxB * 13) % scaleCount + scaleCount) % scaleCount;
+  // Smooth scale movement: step ±1 from current scale instead of jumping
+  let scaleIdx;
+  if (a.roundParams && a.roundParams.scaleIdx != null) {
+    const prev = a.roundParams.scaleIdx;
+    const roll = Math.random();
+    if (roll < 0.4) scaleIdx = prev; // 40% stay
+    else if (roll < 0.7) scaleIdx = (prev + 1) % scaleCount; // 30% step up
+    else scaleIdx = (prev - 1 + scaleCount) % scaleCount; // 30% step down
+  } else {
+    scaleIdx = ((tileIdxA * 7 + tileIdxB * 13) % scaleCount + scaleCount) % scaleCount;
+  }
   const octaveOffset = energy > 0.6 ? 1 : energy < 0.3 ? -1 : 0;
   const tiltExp   = 0.15 + contrast * 0.40;
   const attack    = 0.003 + energy * 0.017;
@@ -729,19 +739,23 @@ export function buildWavetables(tileA, tileB, tileIdxA = 0, tileIdxB = 0) {
   buildScaleFreqs(scaleIdx, octaveOffset);
   buildPitchTable(state.gol && state.gol.rows ? state.gol.rows : (a.pitchTableRows || 16));
 
-  if (a.filter) a.filter.frequency.value = filterBase;
+  if (a.filter) {
+    const now = a.ctx.currentTime;
+    a.filter.frequency.cancelScheduledValues(now);
+    a.filter.frequency.setTargetAtTime(filterBase, now, 0.8);
+  }
 
   // Drone: first two scale notes
   const droneFreqs = currentScale.slice(0, 2);
   if (a.droneOsc) {
     a.droneOsc.forEach(({ osc }, i) => {
-      if (droneFreqs[i]) osc.frequency.setTargetAtTime(droneFreqs[i], a.ctx.currentTime, 0.3);
+      if (droneFreqs[i]) osc.frequency.setTargetAtTime(droneFreqs[i], a.ctx.currentTime, 1.2);
     });
   }
 
   // Sub bass: one octave below root
   if (a._sub && droneFreqs[0]) {
-    a._sub.osc.frequency.setTargetAtTime(droneFreqs[0] * 0.5, a.ctx.currentTime, 0.3);
+    a._sub.osc.frequency.setTargetAtTime(droneFreqs[0] * 0.5, a.ctx.currentTime, 1.2);
   }
 
   a.waveAlive = tileToPeriodicWave(a.ctx, tileA, tiltExp);
@@ -753,13 +767,13 @@ export function buildWavetables(tileA, tileB, tileIdxA = 0, tileIdxB = 0) {
     a.droneOsc.forEach(({ osc, gain }) => {
       const prevAmp = gain.gain.value;
       gain.gain.cancelScheduledValues(now);
-      gain.gain.setTargetAtTime(0, now, 0.08);
+      gain.gain.setTargetAtTime(0, now, 0.25);
       setTimeout(() => {
         if (a.waveDrone) osc.setPeriodicWave(a.waveDrone);
         else osc.type = 'sine';
         gain.gain.cancelScheduledValues(a.ctx.currentTime);
-        gain.gain.setTargetAtTime(prevAmp, a.ctx.currentTime, 0.15);
-      }, 150);
+        gain.gain.setTargetAtTime(prevAmp, a.ctx.currentTime, 0.6);
+      }, 500);
     });
   }
 
