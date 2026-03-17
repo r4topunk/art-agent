@@ -2,6 +2,7 @@ import { buildWallpaper } from './wallpaper.js';
 import { buildKaleido } from './kaleidoscope.js';
 import { buildGameOfLife } from './gameoflife.js';
 import { state } from '../state.js';
+import { perfTick } from './perfmon.js';
 
 let muralCanvas, muralCtx;
 let muralW = 0, muralH = 0;
@@ -72,4 +73,5 @@ export function renderMural() {
     ctx.globalAlpha = 1;
     if (t >= 1) crossfade = null;
   }
+  perfTick();
 }

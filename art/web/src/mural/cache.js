@@ -13,6 +13,10 @@ export function clearTileCache() {
   tileCache.clear();
 }
 
+export function getTileCacheSize() {
+  return tileCache.size;
+}
+
 export function getCachedTile(grid, key, tileSize, rot, flip) {
   if (tileCacheSize !== tileSize) { tileCache.clear(); tileCacheSize = tileSize; }
   const fullKey = rot || flip ? key + 'r' + rot + (flip ? 'f' : '') : key;

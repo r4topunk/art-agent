@@ -208,6 +208,45 @@ body.fullscreen #pages          { inset:0; }
   pointer-events:none; white-space:nowrap;
 }
 
+/* ── Performance monitor (dev only) ─────────────── */
+
+#perf-monitor {
+  position:absolute; bottom:12px; right:14px;
+  z-index:10; pointer-events:none;
+  background:rgba(6,6,14,0.82); backdrop-filter:blur(8px); -webkit-backdrop-filter:blur(8px);
+  border:1px solid var(--border2); border-radius:3px;
+  padding:8px 10px; min-width:160px;
+  font-variant-numeric:tabular-nums;
+}
+
+.perf-title {
+  font-size:7px; letter-spacing:3px; text-transform:uppercase;
+  color:var(--text-dim); margin-bottom:4px;
+  border-bottom:1px solid var(--border2); padding-bottom:3px;
+}
+
+.perf-row {
+  display:flex; justify-content:space-between; align-items:center;
+  gap:8px; height:16px;
+}
+
+.perf-label {
+  font-size:8px; color:var(--text-dim); letter-spacing:1px; text-transform:uppercase;
+}
+
+.perf-val {
+  font-size:9px; color:var(--text); text-align:right;
+}
+
+.perf-ok   { color:var(--neon); }
+.perf-warn { color:var(--amber); }
+.perf-bad  { color:var(--pink); }
+
+#perf-fps-graph {
+  display:block; width:100%; height:32px;
+  margin-top:6px; border-top:1px solid var(--border2); padding-top:4px;
+}
+
 /* ═══════════════════════════════════════════════════
    RESPONSIVE — MOBILE (< 640px)
    ═══════════════════════════════════════════════════ */

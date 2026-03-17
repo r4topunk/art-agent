@@ -17,6 +17,7 @@ import { renderMural } from './mural/render.js';
 import * as controls from './mural/controls.js';
 import { loadSettings } from './persist.js';
 import { state } from './state.js';
+import { initPerfMon } from './mural/perfmon.js';
 
 // Build DOM
 const layerCanvases = buildSpine();
@@ -73,6 +74,9 @@ if (_saved.volumePercent != null) {
 }
 
 switchTab(_saved.activeTab ?? 'main');
+
+// Dev performance monitor
+initPerfMon();
 
 // Connect WebSocket
 connect(handle);
