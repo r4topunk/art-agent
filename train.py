@@ -468,25 +468,28 @@ with torch.no_grad():
 vis_grids = [decode_to_grid(vis_tokens[i].tolist()) for i in range(vis_tokens.shape[0])]
 vis_scores = score_batch(vis_grids)
 
-# Save individual top-9 pieces (upscaled 64x64)
+PALETTE_RGB = [(0,0,0),(255,241,232),(255,0,77),(255,163,0),(255,236,39),(0,228,54),(41,173,255),(255,119,168)]
+
+def grid_to_rgb(g):
+    rgb = np.zeros((GRID_SIZE, GRID_SIZE, 3), dtype=np.uint8)
+    for ci, color in enumerate(PALETTE_RGB):
+        rgb[g == ci] = color
+    return rgb
+
+# Save individual top-9 pieces (upscaled 256x256)
 ranked_vis = sorted(range(len(vis_grids)), key=lambda i: vis_scores[i]['composite'], reverse=True)
 for rank, idx in enumerate(ranked_vis[:9]):
-    g = vis_grids[idx]
-    rgb = np.zeros((GRID_SIZE, GRID_SIZE, 3), dtype=np.uint8)
-    for ci, color in enumerate([(0,0,0),(255,241,232),(255,0,77),(255,163,0),(255,236,39),(0,228,54),(41,173,255),(255,119,168)]):
-        rgb[g == ci] = color
-    img = PILImage.fromarray(rgb).resize((64, 64), PILImage.NEAREST)
+    img = PILImage.fromarray(grid_to_rgb(vis_grids[idx])).resize((256, 256), PILImage.NEAREST)
     img.save(VISUAL_DIR / f"top{rank+1}_score{vis_scores[idx]['composite']:.3f}.png")
 
-# Save a 6x6 contact sheet (all 36 pieces, each 64x64)
-sheet = PILImage.new("RGB", (6 * 64, 6 * 64))
+# Save a 6x6 contact sheet (~1000x1000: each cell 166px, 6*166=996)
+cell_size = 166
+sheet_size = 6 * cell_size  # 996
+sheet = PILImage.new("RGB", (sheet_size, sheet_size))
 for i, g in enumerate(vis_grids):
-    rgb = np.zeros((GRID_SIZE, GRID_SIZE, 3), dtype=np.uint8)
-    for ci, color in enumerate([(0,0,0),(255,241,232),(255,0,77),(255,163,0),(255,236,39),(0,228,54),(41,173,255),(255,119,168)]):
-        rgb[g == ci] = color
-    cell = PILImage.fromarray(rgb).resize((64, 64), PILImage.NEAREST)
+    cell = PILImage.fromarray(grid_to_rgb(g)).resize((cell_size, cell_size), PILImage.NEAREST)
     row, col = divmod(i, 6)
-    sheet.paste(cell, (col * 64, row * 64))
+    sheet.paste(cell, (col * cell_size, row * cell_size))
 sheet.save(VISUAL_DIR / "contact_sheet.png")
 
 print(f"Visual output saved to {VISUAL_DIR}/")
