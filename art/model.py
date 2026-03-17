@@ -188,14 +188,6 @@ class PixelGPT(nn.Module):
         use_top_p = top_p < 1.0
         n_blocks = len(blocks)
 
-        # Prime the cache with BOS token
-        bos = seq[:, :1]  # (B, 1)
-        h = tok_emb(bos) + pos_emb(pos_buf)
-        new_caches = [None] * n_blocks
-        for i in range(n_blocks):
-            h, new_caches[i] = blocks[i].forward_cached(h, kv_caches[i])
-        kv_caches = new_caches
-
         for t in range(1, config.seq_length):
             cur_tok = seq[:, t - 1 : t]  # (B, 1)
             pos_buf.fill_(t - 1)

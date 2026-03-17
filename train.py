@@ -149,14 +149,6 @@ class PixelGPT(nn.Module):
         pos_buf = torch.zeros(1, 1, dtype=torch.long, device=gen_device)
         inv_temp = 1.0 / temperature
 
-        # Prime cache with BOS
-        bos = seq[:, :1]
-        h = self.tok_emb(bos) + self.pos_emb(pos_buf)
-        new_caches = [None] * len(self.blocks)
-        for i, block in enumerate(self.blocks):
-            h, new_caches[i] = block.forward_cached(h, kv_caches[i])
-        kv_caches = new_caches
-
         for t in range(1, SEQ_LENGTH):
             cur_tok = seq[:, t - 1:t]
             pos_buf.fill_(t - 1)
