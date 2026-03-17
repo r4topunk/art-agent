@@ -355,11 +355,30 @@ function fadeOutOscBank(durationSec = 0.8) {
 }
 
 export function initOscBank(rows) {
-  fadeOutOscBank();
   const a = state.audio;
   if (!a.ctx || !a.synthBus) return;
 
   const UNISON_DETUNE = 6; // cents — classic supersaw-style detuning
+  const now = a.ctx.currentTime;
+  const GLIDE = 0.3;
+
+  // Reuse existing bank if row count matches — just update freqs & wavetable
+  if (a.oscBank.length === rows) {
+    for (let r = 0; r < rows; r++) {
+      const freq = pitchTable[r] || 440;
+      const voice = a.oscBank[r];
+      voice.oscA.frequency.setTargetAtTime(freq, now, GLIDE);
+      voice.oscB.frequency.setTargetAtTime(freq, now, GLIDE);
+      if (a.waveAlive) {
+        voice.oscA.setPeriodicWave(a.waveAlive);
+        voice.oscB.setPeriodicWave(a.waveAlive);
+      }
+    }
+    return;
+  }
+
+  // Row count changed — rebuild
+  fadeOutOscBank();
 
   a.oscBank = [];
   for (let r = 0; r < rows; r++) {
@@ -758,25 +777,39 @@ export function buildWavetables(tileA, tileB, tileIdxA = 0, tileIdxB = 0) {
     a._sub.osc.frequency.setTargetAtTime(droneFreqs[0] * 0.5, a.ctx.currentTime, 1.2);
   }
 
-  a.waveAlive = tileToPeriodicWave(a.ctx, tileA, tiltExp);
-  a.waveDrone = tileToPeriodicWave(a.ctx, tileB, tiltExp);
-
-  // Crossfade drone wavetable: dip gain, swap wave, restore
-  if (a.droneOsc) {
-    const now = a.ctx.currentTime;
-    a.droneOsc.forEach(({ osc, gain }) => {
-      const prevAmp = gain.gain.value;
-      gain.gain.cancelScheduledValues(now);
-      gain.gain.setTargetAtTime(0, now, 0.25);
-      setTimeout(() => {
-        if (a.waveDrone) osc.setPeriodicWave(a.waveDrone);
-        else osc.type = 'sine';
-        gain.gain.cancelScheduledValues(a.ctx.currentTime);
-        gain.gain.setTargetAtTime(prevAmp, a.ctx.currentTime, 0.6);
-      }, 500);
-    });
-  }
-
+  // Defer wavetable DFT to avoid blocking the audio thread
   const rows = state.gol && state.gol.rows ? state.gol.rows : 0;
+
+  // Update osc bank frequencies immediately (no DFT needed)
   if (rows > 0) initOscBank(rows);
+
+  // Compute wavetables off the hot path, then apply
+  setTimeout(() => {
+    a.waveAlive = tileToPeriodicWave(a.ctx, tileA, tiltExp);
+    a.waveDrone = tileToPeriodicWave(a.ctx, tileB, tiltExp);
+
+    // Apply new wavetable to osc bank
+    if (a.waveAlive) {
+      for (const voice of a.oscBank) {
+        voice.oscA.setPeriodicWave(a.waveAlive);
+        voice.oscB.setPeriodicWave(a.waveAlive);
+      }
+    }
+
+    // Crossfade drone wavetable: dip gain, swap wave, restore
+    if (a.droneOsc) {
+      const now = a.ctx.currentTime;
+      a.droneOsc.forEach(({ osc, gain }) => {
+        const prevAmp = gain.gain.value;
+        gain.gain.cancelScheduledValues(now);
+        gain.gain.setTargetAtTime(0, now, 0.25);
+        setTimeout(() => {
+          if (a.waveDrone) osc.setPeriodicWave(a.waveDrone);
+          else osc.type = 'sine';
+          gain.gain.cancelScheduledValues(a.ctx.currentTime);
+          gain.gain.setTargetAtTime(prevAmp, a.ctx.currentTime, 0.6);
+        }, 500);
+      });
+    }
+  }, 0);
 }
