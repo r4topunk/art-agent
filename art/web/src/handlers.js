@@ -8,7 +8,6 @@ import { drawConfidence } from './draw/confidence.js';
 import { updateSparkline } from './draw/sparkline.js';
 import { renderMural } from './mural/render.js';
 import { clearTileCache } from './mural/cache.js';
-import { startKaleidoAnim, stopLayoutLoop, stopRotationLoop } from './mural/timers.js';
 
 let layerCanvases = [];
 let galleryCanvases = [];
@@ -143,15 +142,6 @@ export function handle(event, data) {
 
   case 'finetune_start': {
     setPhase('finetuning');
-    // Only auto-switch to kaleidoscope if in wallpaper mode
-    if (state.muralMode === 'wallpaper' && state.selectedPieces.length) {
-      stopLayoutLoop();
-      stopRotationLoop();
-      state.muralMode = 'kaleidoscope';
-      const btn = document.getElementById('mural-mode-btn');
-      btn.textContent = 'Kaleidoscope'; btn.classList.add('kaleido');
-      startKaleidoAnim();
-    }
     break;
   }
 

@@ -16,23 +16,8 @@ export function syncSoundToolbarBtn() {
   if (btn) btn.classList.toggle('active', state.audio.enabled);
 }
 
-// Mode-aware labels for timing controls
-const TIMING_LABELS = {
-  wallpaper:    { transition: 'Cycle',     flip: 'Rotation' },
-  kaleidoscope: { transition: 'Regen',     flip: null },       // flip unused
-  gameoflife:   { transition: 'Round',     flip: 'Tick speed' },
-};
-
-export function updateTimingLabels() {
-  const labels = TIMING_LABELS[state.muralMode] || TIMING_LABELS.wallpaper;
-  const tLabel = document.getElementById('transition-label');
-  const fLabel = document.getElementById('flip-label');
-  const fRow   = document.getElementById('flip-row');
-
-  if (tLabel) tLabel.textContent = labels.transition;
-  if (fRow) fRow.style.display = labels.flip ? '' : 'none';
-  if (fLabel && labels.flip) fLabel.textContent = labels.flip;
-}
+// Labels are now static (always GoL mode) — keep export for compatibility
+export function updateTimingLabels() {}
 
 export function wireMuralToolbar(controls) {
   const $ = (id) => document.getElementById(id);
@@ -45,10 +30,11 @@ export function wireMuralToolbar(controls) {
     btn.classList.toggle('open', !panel.classList.contains('collapsed'));
   });
 
-  // ── Mode button ──
-  $('mural-mode-btn').addEventListener('click', () => {
-    controls.toggleMuralMode();
-    updateTimingLabels();
+  // ── Mode bar (bottom center) ──
+  document.querySelectorAll('#mode-bar .mode-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      controls.switchVariant(btn.dataset.variant);
+    });
   });
 
   // ── Pause ──
@@ -91,15 +77,6 @@ export function wireMuralToolbar(controls) {
     $('flip-val').textContent = (val / 1000).toFixed(1) + 's';
     saveSettings({ KALEIDO_FLIP_MS: val });
     controls.kaleidoFlipTime(0); // restart timers without changing value
-  });
-
-  // ── GoL variant select ──
-  $('gol-variant-select').addEventListener('change', (e) => {
-    state.gol.variant = e.target.value;
-    saveSettings({ golVariant: e.target.value });
-    if (state.muralMode === 'gameoflife' && state.gol.running) {
-      controls.restartGol();
-    }
   });
 
   // ── Past generations slider ──

@@ -15,6 +15,45 @@
 </head>
 <body>
 
+<!-- LANDING SCREEN -->
+<div id="landing">
+  <div class="landing-inner">
+    <div class="lang-toggle">
+      <button class="lang-btn active" data-lang="en">EN</button>
+      <button class="lang-btn" data-lang="pt">PT</button>
+    </div>
+
+    <h1 class="landing-title">The Organism</h1>
+    <p class="landing-subtitle" data-i18n="subtitle">
+      Neural pixel art · Cellular automata · Generative sound
+    </p>
+
+    <p class="landing-desc" data-i18n="desc">
+      A living system where a small neural network learns to generate 16×16 pixel art tiles.
+      Selected pieces become seeds for three cellular automata modes — Game of Life,
+      Quad Fusion, and Reaction-Diffusion — that evolve on screen while an audio engine
+      synthesizes sound from cell activity in real time.
+    </p>
+
+    <div class="landing-shortcuts-title" data-i18n="shortcuts-title">Keyboard Shortcuts</div>
+    <div class="shortcuts-grid">
+      <div class="shortcut-row"><span class="shortcut-key">M</span><span class="shortcut-label" data-i18n="k-mural">Mural view</span></div>
+      <div class="shortcut-row"><span class="shortcut-key">N</span><span class="shortcut-label" data-i18n="k-neural">Neural view</span></div>
+      <div class="shortcut-row"><span class="shortcut-key">Space</span><span class="shortcut-label" data-i18n="k-pause">Pause / Play</span></div>
+      <div class="shortcut-row"><span class="shortcut-key">F</span><span class="shortcut-label" data-i18n="k-full">Fullscreen</span></div>
+      <div class="shortcut-row"><span class="shortcut-key">S</span><span class="shortcut-label" data-i18n="k-sound">Toggle sound</span></div>
+      <div class="shortcut-row"><span class="shortcut-key">C</span><span class="shortcut-label" data-i18n="k-crt">CRT effect</span></div>
+      <div class="shortcut-row"><span class="shortcut-key">+ / −</span><span class="shortcut-label" data-i18n="k-zoom">Zoom in / out</span></div>
+      <div class="shortcut-row"><span class="shortcut-key">[ / ]</span><span class="shortcut-label" data-i18n="k-vol">Volume down / up</span></div>
+    </div>
+
+    <div class="landing-start-wrap">
+      <button id="landing-start" data-i18n="start">Start</button>
+    </div>
+    <p class="landing-note" data-i18n="note">Sound will start at 50% volume</p>
+  </div>
+</div>
+
 <!-- TAB BAR -->
 <div id="tab-bar">
   <button class="tab active" data-tab="main">Neural</button>
@@ -97,7 +136,6 @@
 
     <!-- Floating toolbar buttons -->
     <div id="mural-toolbar">
-      <button id="mural-mode-btn" title="Switch mode">Wallpaper</button>
       <button id="mural-pause-btn" class="tool-icon-btn" title="Pause / Play (Space)">&#x23F8;</button>
       <button id="mural-fullscreen-btn" class="tool-icon-btn" title="Fullscreen (F)">&#x26F6;</button>
       <button id="mural-crt-btn" class="tool-icon-btn" title="CRT effect (C)">CRT</button>
@@ -107,6 +145,13 @@
     <div id="mural-status">
       <span id="mural-gen-info"></span>
       <span id="mural-phase"></span>
+    </div>
+
+    <!-- Mode switcher — bottom center -->
+    <div id="mode-bar">
+      <button class="mode-btn active" data-variant="conway">Game of Life</button>
+      <button class="mode-btn" data-variant="quadlife">Quad Fusion</button>
+      <button class="mode-btn" data-variant="reaction-diffusion">Reaction-Diffusion</button>
     </div>
 
     <!-- Collapsible settings panel -->
@@ -121,17 +166,6 @@
             <div class="setting-control">
               <input type="range" id="range-tile" min="0" max="10" step="1" value="5">
               <span class="setting-value" id="zoom-val">16px</span>
-            </div>
-          </label>
-          <label class="setting-row">
-            <span class="setting-label">Automaton</span>
-            <div class="setting-control">
-              <select id="gol-variant-select" class="setting-select">
-                <option value="conway">Conway's GoL</option>
-                <option value="immigration">Immigration</option>
-                <option value="quadlife">QuadLife</option>
-                <option value="reaction-diffusion">Reaction-Diffusion</option>
-              </select>
             </div>
           </label>
           <label class="setting-row">
@@ -153,14 +187,14 @@
         <div class="settings-group">
           <div class="group-title">Timing</div>
           <label class="setting-row">
-            <span class="setting-label" id="transition-label">Cycle</span>
+            <span class="setting-label" id="transition-label">Round</span>
             <div class="setting-control">
               <input type="range" id="range-transition" min="500" max="15000" step="500" value="3500">
               <span class="setting-value" id="transition-val">3.5s</span>
             </div>
           </label>
           <label class="setting-row" id="flip-row">
-            <span class="setting-label" id="flip-label">Rotation</span>
+            <span class="setting-label" id="flip-label">Tick speed</span>
             <div class="setting-control">
               <input type="range" id="range-flip" min="100" max="10000" step="500" value="3500">
               <span class="setting-value" id="flip-val">3.5s</span>

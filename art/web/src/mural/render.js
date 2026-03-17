@@ -1,5 +1,3 @@
-import { buildWallpaper } from './wallpaper.js';
-import { buildKaleido } from './kaleidoscope.js';
 import { buildGameOfLife, getPooledPieces } from './gameoflife.js';
 import { state } from '../state.js';
 import { perfTick } from './perfmon.js';
@@ -37,9 +35,7 @@ export function startCrossfade(durationMs = 500) {
 }
 
 export function renderMural() {
-  const pieces = state.muralMode === 'kaleidoscope' && state.selectedPieces.length
-    ? state.selectedPieces
-    : getPooledPieces();
+  const pieces = getPooledPieces();
   const overlay = document.getElementById('mural-overlay');
   if (!pieces.length) { overlay.textContent = 'no pieces yet'; return; }
   overlay.textContent = '';
@@ -52,14 +48,7 @@ export function renderMural() {
   }
   ctx.imageSmoothingEnabled = false;
   ctx.clearRect(0, 0, W, H);
-  let src;
-  if (state.muralMode === 'gameoflife' && state.gol.grid) {
-    src = buildGameOfLife(state.muralTileSize);
-  } else if (state.muralMode === 'kaleidoscope' && state.selectedPieces.length) {
-    src = buildKaleido(state.selectedPieces, state.muralTileSize);
-  } else {
-    src = buildWallpaper(pieces, state.muralTileSize);
-  }
+  const src = state.gol.grid ? buildGameOfLife(state.muralTileSize) : null;
   if (!src) return;
   const ox = Math.round((W - src.width) / 2);
   const oy = Math.round((H - src.height) / 2);

@@ -9,17 +9,12 @@ export const state = {
   pastGenerations: _s.pastGenerations ?? 0,  // how many past gens to mix in (0 = current only)
   selectedPieces: [],
   muralTileSize: 16,  // always reset to safe default — small tiles freeze on init
-  muralMode: _s.muralMode ?? 'wallpaper',
-  kaleidoRunning: false,
-  kaleidoTimer: null,
+  muralMode: 'gameoflife',
   TRANSITION_MS: _s.TRANSITION_MS ?? 3500,
   KALEIDO_FLIP_MS: _s.KALEIDO_FLIP_MS ?? 3500,
   muralTileRotation: _s.muralTileRotation ?? true,
   muralPaused: _s.muralPaused ?? false,
   volumePercent: _s.volumePercent ?? 60,
-  layoutSeed: 0,
-  layoutTimer: null,
-  rotationTimer: null,
   // Game of Life
   gol: {
     grid: null,

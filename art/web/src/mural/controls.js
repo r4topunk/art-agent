@@ -4,34 +4,17 @@ import { renderMural, startCrossfade } from './render.js';
 import { clearTileCache } from './cache.js';
 import { saveSettings } from '../persist.js';
 import {
-  startLayoutLoop, stopLayoutLoop,
-  startRotationLoop, stopRotationLoop,
-  startKaleidoAnim, stopKaleidoAnim,
   startGol, stopGol, restartGolTick,
 } from './timers.js';
 
 // ── Helpers ──
 
 function stopAllTimers() {
-  stopLayoutLoop();
-  stopRotationLoop();
-  stopKaleidoAnim();
   stopGol();
 }
 
 function startTimersForMode() {
-  switch (state.muralMode) {
-    case 'wallpaper':
-      startLayoutLoop();
-      startRotationLoop();
-      break;
-    case 'kaleidoscope':
-      startKaleidoAnim();
-      break;
-    case 'gameoflife':
-      startGol();
-      break;
-  }
+  startGol();
 }
 
 // ── Zoom ──
@@ -58,18 +41,7 @@ export function muralTransitionTime(delta) {
   const slider = document.getElementById('range-transition');
   if (slider) slider.value = state.TRANSITION_MS;
   saveSettings({ TRANSITION_MS: state.TRANSITION_MS });
-  // Restart whichever timer uses TRANSITION_MS in the current mode
-  switch (state.muralMode) {
-    case 'wallpaper':
-      if (state.layoutTimer) { stopLayoutLoop(); startLayoutLoop(); }
-      break;
-    case 'kaleidoscope':
-      if (state.kaleidoRunning) { stopKaleidoAnim(); startKaleidoAnim(); }
-      break;
-    case 'gameoflife':
-      startGol(); // startGol calls stopGol internally
-      break;
-  }
+  startGol(); // startGol calls stopGol internally
 }
 
 // ── Flip time (tile rotation speed / GoL tick speed) ──
@@ -81,16 +53,8 @@ export function kaleidoFlipTime(delta) {
   const slider = document.getElementById('range-flip');
   if (slider) slider.value = state.KALEIDO_FLIP_MS;
   saveSettings({ KALEIDO_FLIP_MS: state.KALEIDO_FLIP_MS });
-  switch (state.muralMode) {
-    case 'wallpaper':
-      if (state.rotationTimer) { stopRotationLoop(); startRotationLoop(); }
-      break;
-    case 'gameoflife':
-      state.gol.tickMS = state.KALEIDO_FLIP_MS;
-      restartGolTick();
-      break;
-    // kaleidoscope: KALEIDO_FLIP_MS not used, no-op
-  }
+  state.gol.tickMS = state.KALEIDO_FLIP_MS;
+  restartGolTick();
 }
 
 // ── Pause ──
@@ -123,30 +87,28 @@ export function toggleFullscreen() {
   }
 }
 
-// ── Mode toggle ──
+// ── Variant switch ──
 
-const MODES = ['wallpaper', 'kaleidoscope', 'gameoflife'];
-const MODE_LABELS = { wallpaper: 'Wallpaper', kaleidoscope: 'Kaleidoscope', gameoflife: 'Game of Life' };
+const VARIANTS = ['conway', 'quadlife', 'reaction-diffusion'];
 
-export function toggleMuralMode() {
-  stopAllTimers();
+export function switchVariant(variant) {
+  if (!VARIANTS.includes(variant)) return;
+  if (state.gol.variant === variant) return;
 
-  const idx = MODES.indexOf(state.muralMode);
-  state.muralMode = MODES[(idx + 1) % MODES.length];
-  const btn = document.getElementById('mural-mode-btn');
-  btn.textContent = MODE_LABELS[state.muralMode];
-  btn.classList.toggle('kaleido', state.muralMode !== 'wallpaper');
-  saveSettings({ muralMode: state.muralMode });
+  state.gol.variant = variant;
+  saveSettings({ golVariant: variant });
+  syncModeBar();
 
-  startTimersForMode();
-  if (state.muralMode !== 'gameoflife') renderMural(); // GoL renders via its own init
-}
-
-// Restart GoL (used when variant changes)
-export function restartGol() {
+  // Restart GoL with new variant
   startCrossfade(300);
   stopGol();
   startGol();
+}
+
+export function syncModeBar() {
+  document.querySelectorAll('#mode-bar .mode-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.variant === state.gol.variant);
+  });
 }
 
 // Sync toolbar DOM to match current state (called on startup)
@@ -177,10 +139,8 @@ export function syncToolbarUI() {
   rotBtn.textContent = state.muralTileRotation ? 'ON' : 'OFF';
   rotBtn.classList.toggle('active', state.muralTileRotation);
 
-  // Mode
-  const modeBtn = document.getElementById('mural-mode-btn');
-  modeBtn.textContent = MODE_LABELS[state.muralMode];
-  modeBtn.classList.toggle('kaleido', state.muralMode !== 'wallpaper');
+  // Mode bar
+  syncModeBar();
 
   // Past generations
   const pastGensSlider = document.getElementById('range-past-gens');
@@ -191,10 +151,6 @@ export function syncToolbarUI() {
     const avail = Math.min(n, state.pieceHistory.length);
     pastGensVal.textContent = avail > 0 ? `${avail}/${n}` : '0';
   }
-
-  // GoL variant
-  const variantSelect = document.getElementById('gol-variant-select');
-  if (variantSelect) variantSelect.value = state.gol.variant || 'conway';
 
   // CRT
   const crtBtn = document.getElementById('mural-crt-btn');

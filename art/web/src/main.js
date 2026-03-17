@@ -4,6 +4,7 @@ import './styles/crt.css';
 import './styles/tabs.css';
 import './styles/neural.css';
 import './styles/mural.css';
+import './styles/landing.css';
 
 // Modules
 import { buildSpine } from './dom/spine.js';
@@ -18,6 +19,7 @@ import * as controls from './mural/controls.js';
 import { loadSettings } from './persist.js';
 import { state } from './state.js';
 import { initPerfMon } from './mural/perfmon.js';
+import { initLanding } from './landing.js';
 
 // Build DOM
 const layerCanvases = buildSpine();
@@ -45,10 +47,9 @@ document.addEventListener('fullscreenchange', () => {
   if (document.getElementById('page-mural').classList.contains('active')) renderMural();
 });
 
-// Double-click canvas to toggle fullscreen (skip in GoL mode — use F key)
+// Double-click canvas to toggle fullscreen
 document.getElementById('mural-canvas-wrap').addEventListener('dblclick', () => {
-  if (document.getElementById('page-mural').classList.contains('active') &&
-      state.muralMode !== 'gameoflife') {
+  if (document.getElementById('page-mural').classList.contains('active')) {
     controls.toggleFullscreen();
   }
 });
@@ -74,6 +75,9 @@ if (_saved.volumePercent != null) {
 }
 
 switchTab(_saved.activeTab ?? 'main');
+
+// Init landing screen
+initLanding();
 
 // Dev performance monitor
 initPerfMon();

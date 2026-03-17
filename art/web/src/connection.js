@@ -1,6 +1,5 @@
 import { state } from './state.js';
 import { syncToolbarUI } from './mural/controls.js';
-import { updateTimingLabels } from './dom/mural-toolbar.js';
 
 export function connect(handler) {
   // On HTTPS, ws:// is blocked (mixed content). Skip straight to static data.
@@ -52,10 +51,7 @@ async function loadStaticPieces(handler) {
   const pages = document.getElementById('pages');
   if (pages) pages.style.inset = '0';
 
-  // Default to Game of Life mode
-  state.muralMode = 'gameoflife';
   syncToolbarUI();
-  updateTimingLabels();
 
   // Activate mural tab
   const muralTab = document.querySelector('.tab[data-tab="mural"]');

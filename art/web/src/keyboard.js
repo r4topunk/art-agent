@@ -9,6 +9,8 @@ import { syncSoundToolbarBtn } from './dom/mural-toolbar.js';
 export function initKeyboard() {
   document.addEventListener('keydown', e => {
     if (e.target.tagName === 'INPUT') return;
+    const landing = document.getElementById('landing');
+    if (landing && !landing.classList.contains('hidden')) return;
     if (e.key === 'm' || e.key === 'M') switchTab('mural');
     if (e.key === 'n' || e.key === 'N') switchTab('main');
     if (e.key === ' ' && document.getElementById('page-mural').classList.contains('active')) {
