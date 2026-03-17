@@ -1,6 +1,6 @@
 import { buildWallpaper } from './wallpaper.js';
 import { buildKaleido } from './kaleidoscope.js';
-import { buildGameOfLife } from './gameoflife.js';
+import { buildGameOfLife, getPooledPieces } from './gameoflife.js';
 import { state } from '../state.js';
 import { perfTick } from './perfmon.js';
 
@@ -39,7 +39,7 @@ export function startCrossfade(durationMs = 500) {
 export function renderMural() {
   const pieces = state.muralMode === 'kaleidoscope' && state.selectedPieces.length
     ? state.selectedPieces
-    : state.allPieces.length ? state.allPieces : [];
+    : getPooledPieces();
   const overlay = document.getElementById('mural-overlay');
   if (!pieces.length) { overlay.textContent = 'no pieces yet'; return; }
   overlay.textContent = '';

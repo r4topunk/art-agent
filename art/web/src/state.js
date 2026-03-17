@@ -5,6 +5,8 @@ export const state = {
   lossHistory: [],
   gradHistory: [],
   allPieces: [],
+  pieceHistory: [],       // ring buffer of past generations' pieces arrays
+  pastGenerations: _s.pastGenerations ?? 0,  // how many past gens to mix in (0 = current only)
   selectedPieces: [],
   muralTileSize: 16,  // always reset to safe default — small tiles freeze on init
   muralMode: _s.muralMode ?? 'wallpaper',

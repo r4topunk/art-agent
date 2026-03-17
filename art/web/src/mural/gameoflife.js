@@ -42,7 +42,48 @@ function histDist(a, b) {
   return d; // skip sqrt — comparing relative magnitudes is enough
 }
 
-// Farthest-point sampling: greedily picks the most visually distinct tiles
+// Shannon entropy of a histogram (higher = more complex/patterned tile)
+function histEntropy(hist) {
+  let h = 0;
+  for (let i = 0; i < hist.length; i++) {
+    if (hist[i] > 0) h -= hist[i] * Math.log2(hist[i]);
+  }
+  return h;
+}
+
+// Weighted random pick: select index with probability proportional to weights
+function weightedRandom(weights) {
+  let sum = 0;
+  for (let i = 0; i < weights.length; i++) sum += weights[i];
+  let r = Math.random() * sum;
+  for (let i = 0; i < weights.length; i++) {
+    r -= weights[i];
+    if (r <= 0) return i;
+  }
+  return weights.length - 1;
+}
+
+// Dominant color of a tile (palette index with highest count)
+function dominantColor(hist) {
+  let best = 0;
+  for (let i = 1; i < hist.length; i++) {
+    if (hist[i] > hist[best]) best = i;
+  }
+  return best;
+}
+
+// Top-2 colors of a tile (for secondary diversity check)
+function topTwoColors(hist) {
+  let first = 0, second = -1;
+  for (let i = 1; i < hist.length; i++) {
+    if (hist[i] > hist[first]) { second = first; first = i; }
+    else if (second === -1 || hist[i] > hist[second]) second = i;
+  }
+  return [first, second === -1 ? first : second];
+}
+
+// Farthest-point sampling that enforces different dominant colors between picks.
+// Uses entropy bias + stochastic selection for variety across rounds.
 export function pickDistinctTiles(pieces, count) {
   if (pieces.length <= count) {
     return {
@@ -52,39 +93,75 @@ export function pickDistinctTiles(pieces, count) {
   }
 
   const hists = pieces.map(tileHistogram);
+  const entropies = hists.map(histEntropy);
+  const maxEnt = Math.max(...entropies, 1e-6);
+  const entWeights = entropies.map(e => 0.15 + 0.85 * (e / maxEnt));
+  const domColors = hists.map(dominantColor);
+  const topColors = hists.map(topTwoColors);
+
   const picked = [];
   const pickedIdx = [];
   const used = new Set();
+  const usedDomColors = new Set();
 
-  // Start from a random tile
-  const first = Math.floor(Math.random() * pieces.length);
+  // First tile: entropy-weighted random pick
+  const first = weightedRandom(entWeights);
   picked.push(pieces[first]);
   pickedIdx.push(first);
   used.add(first);
+  usedDomColors.add(domColors[first]);
 
-  // Each round, pick the tile whose minimum distance to all already-picked tiles is largest
   while (picked.length < count) {
-    let bestIdx = -1;
-    let bestDist = -1;
+    const candidates = [];
     for (let i = 0; i < pieces.length; i++) {
       if (used.has(i)) continue;
+
       let minDist = Infinity;
       for (const pi of pickedIdx) {
         const d = histDist(hists[i], hists[pi]);
         if (d < minDist) minDist = d;
       }
-      if (minDist > bestDist) {
-        bestDist = minDist;
-        bestIdx = i;
+
+      // Penalize if dominant color already used — scale down score heavily
+      let colorPenalty = 1.0;
+      if (usedDomColors.has(domColors[i])) {
+        // Check if at least the secondary color is different
+        const [, sec] = topColors[i];
+        colorPenalty = usedDomColors.has(sec) ? 0.05 : 0.2;
       }
+
+      candidates.push({
+        idx: i,
+        score: minDist * entWeights[i] * colorPenalty,
+      });
     }
-    if (bestIdx === -1) break;
-    picked.push(pieces[bestIdx]);
-    pickedIdx.push(bestIdx);
-    used.add(bestIdx);
+    if (!candidates.length) break;
+
+    // Sort descending, weighted-random from top 25%
+    candidates.sort((a, b) => b.score - a.score);
+    const topN = Math.max(1, Math.ceil(candidates.length * 0.25));
+    const topCandidates = candidates.slice(0, topN);
+    const topScores = topCandidates.map(c => c.score);
+    const winner = topCandidates[weightedRandom(topScores)];
+
+    picked.push(pieces[winner.idx]);
+    pickedIdx.push(winner.idx);
+    used.add(winner.idx);
+    usedDomColors.add(domColors[winner.idx]);
   }
 
   return { tiles: picked, indices: pickedIdx };
+}
+
+// Pool current pieces with N past generations (controlled by state.pastGenerations)
+export function getPooledPieces() {
+  const current = state.allPieces.length ? state.allPieces : [];
+  const n = state.pastGenerations || 0;
+  if (n <= 0 || !state.pieceHistory.length) return current;
+  const histLen = state.pieceHistory.length;
+  const sliceStart = Math.max(0, histLen - n);
+  const past = state.pieceHistory.slice(sliceStart).flat();
+  return [...current, ...past];
 }
 
 export function golInit() {
@@ -93,7 +170,7 @@ export function golInit() {
   // Reaction-diffusion has its own init (continuous simulation)
   if (variant === 'reaction-diffusion') return rdInit();
 
-  const pieces = state.allPieces.length ? state.allPieces : [];
+  const pieces = getPooledPieces();
   if (pieces.length < 2) return;
   const wrap = document.getElementById('mural-canvas-wrap');
   const W = wrap.clientWidth, H = wrap.clientHeight;

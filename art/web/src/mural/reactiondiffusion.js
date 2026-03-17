@@ -2,7 +2,7 @@
 // Produces organic, Rorschach-like patterns: spots, stripes, labyrinths, coral.
 
 import { state } from '../state.js';
-import { pickDistinctTiles } from './gameoflife.js';
+import { pickDistinctTiles, getPooledPieces } from './gameoflife.js';
 import { rebuildPitchTable } from './sonify.js';
 
 export const RD_PRESETS = [
@@ -103,7 +103,7 @@ function updateDiscreteGrid() {
 // ── Public API ──
 
 export function rdInit() {
-  const pieces = state.allPieces.length ? state.allPieces : [];
+  const pieces = getPooledPieces();
   if (pieces.length < 2) return;
 
   const wrap = document.getElementById('mural-canvas-wrap');

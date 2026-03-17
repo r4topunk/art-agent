@@ -73,6 +73,12 @@ export function handle(event, data) {
   }
 
   case 'gen_pieces': {
+    // Archive current pieces before overwriting
+    if (state.allPieces.length) {
+      state.pieceHistory.push(state.allPieces);
+      // Keep at most 50 past generations in memory
+      if (state.pieceHistory.length > 50) state.pieceHistory.shift();
+    }
     state.allPieces = data.pieces;
     clearTileCache();
     for (let i = 0; i < Math.min(data.pieces.length, 36); i++) drawGrid(galleryCanvases[i], data.pieces[i]);
@@ -90,6 +96,14 @@ export function handle(event, data) {
 
   case 'gen_scored': {
     const { pieces, scores } = data;
+    // Archive current pieces before overwriting (if not already archived by gen_pieces)
+    if (state.allPieces.length && state.allPieces !== pieces) {
+      const lastArchived = state.pieceHistory[state.pieceHistory.length - 1];
+      if (lastArchived !== state.allPieces) {
+        state.pieceHistory.push(state.allPieces);
+        if (state.pieceHistory.length > 50) state.pieceHistory.shift();
+      }
+    }
     state.allPieces = pieces;
     clearTileCache();
     let bestIdx = 0, bestVal = -1;

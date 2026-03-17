@@ -182,6 +182,16 @@ export function syncToolbarUI() {
   modeBtn.textContent = MODE_LABELS[state.muralMode];
   modeBtn.classList.toggle('kaleido', state.muralMode !== 'wallpaper');
 
+  // Past generations
+  const pastGensSlider = document.getElementById('range-past-gens');
+  if (pastGensSlider) pastGensSlider.value = state.pastGenerations || 0;
+  const pastGensVal = document.getElementById('past-gens-val');
+  if (pastGensVal) {
+    const n = state.pastGenerations || 0;
+    const avail = Math.min(n, state.pieceHistory.length);
+    pastGensVal.textContent = avail > 0 ? `${avail}/${n}` : '0';
+  }
+
   // GoL variant
   const variantSelect = document.getElementById('gol-variant-select');
   if (variantSelect) variantSelect.value = state.gol.variant || 'conway';

@@ -102,6 +102,15 @@ export function wireMuralToolbar(controls) {
     }
   });
 
+  // ── Past generations slider ──
+  $('range-past-gens').addEventListener('input', (e) => {
+    const val = parseInt(e.target.value);
+    state.pastGenerations = val;
+    const avail = Math.min(val, state.pieceHistory.length);
+    $('past-gens-val').textContent = avail > 0 ? `${avail}/${val}` : '0';
+    saveSettings({ pastGenerations: val });
+  });
+
   // ── Rotate toggle ──
   $('mural-rotate-btn').addEventListener('click', () => controls.toggleTileRotation());
 
