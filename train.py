@@ -10,6 +10,7 @@ import gc
 import math
 import random
 import time
+from pathlib import Path
 
 import numpy as np
 import torch
@@ -202,12 +203,12 @@ BATCH_SIZE = 64
 LEARNING_RATE = 3e-4
 WEIGHT_DECAY = 0.01
 WARMUP_STEPS = 20
-ENTROPY_REG = 0.02     # entropy regularization coefficient
+ENTROPY_REG = 0.05     # entropy regularization coefficient
 
 # GAS loop
-IMAGES_PER_GEN = 48
-SELECT_TOP = 10
-FINETUNE_STEPS = 40
+IMAGES_PER_GEN = 64
+SELECT_TOP = 12
+FINETUNE_STEPS = 50
 FINETUNE_LR = 1e-4
 BOOTSTRAP_MIX_RATIO = 0.3
 GEN_TEMPERATURE_START = 1.1
@@ -285,8 +286,8 @@ dataloader = make_dataloader(bootstrap_patterns, BATCH_SIZE)
 use_amp = device.type == "mps"
 
 # Estimate steps from time budget (70% for bootstrap, 30% for GAS)
-BOOTSTRAP_TIME = int(TIME_BUDGET * 0.3)
-GAS_TIME = int(TIME_BUDGET * 0.7)
+BOOTSTRAP_TIME = int(TIME_BUDGET * 0.20)
+GAS_TIME = int(TIME_BUDGET * 0.80)
 
 model.train()
 step = 0
@@ -446,6 +447,48 @@ eval_results = evaluate_composite(model, temperature=EVAL_TEMPERATURE)
 
 t_end = time.time()
 total_time = t_end - t_start
+
+# ---------------------------------------------------------------------------
+# Save visual output for inspection
+# ---------------------------------------------------------------------------
+
+from PIL import Image as PILImage
+
+VISUAL_DIR = Path("run_visuals")
+VISUAL_DIR.mkdir(exist_ok=True)
+
+# Generate a final batch for visual inspection
+model.eval()
+with torch.no_grad():
+    vis_tokens = model.generate(batch_size=36, temperature=EVAL_TEMPERATURE, device="cpu")
+
+vis_grids = [decode_to_grid(vis_tokens[i].tolist()) for i in range(vis_tokens.shape[0])]
+vis_scores = score_batch(vis_grids)
+
+# Save individual top-9 pieces (upscaled 64x64)
+ranked_vis = sorted(range(len(vis_grids)), key=lambda i: vis_scores[i]['composite'], reverse=True)
+for rank, idx in enumerate(ranked_vis[:9]):
+    g = vis_grids[idx]
+    rgb = np.zeros((GRID_SIZE, GRID_SIZE, 3), dtype=np.uint8)
+    for ci, color in enumerate([(0,0,0),(255,241,232),(255,0,77),(255,163,0),(255,236,39),(0,228,54),(41,173,255),(255,119,168)]):
+        rgb[g == ci] = color
+    img = PILImage.fromarray(rgb).resize((64, 64), PILImage.NEAREST)
+    img.save(VISUAL_DIR / f"top{rank+1}_score{vis_scores[idx]['composite']:.3f}.png")
+
+# Save a 6x6 contact sheet (all 36 pieces, each 64x64)
+sheet = PILImage.new("RGB", (6 * 64, 6 * 64))
+for i, g in enumerate(vis_grids):
+    rgb = np.zeros((GRID_SIZE, GRID_SIZE, 3), dtype=np.uint8)
+    for ci, color in enumerate([(0,0,0),(255,241,232),(255,0,77),(255,163,0),(255,236,39),(0,228,54),(41,173,255),(255,119,168)]):
+        rgb[g == ci] = color
+    cell = PILImage.fromarray(rgb).resize((64, 64), PILImage.NEAREST)
+    row, col = divmod(i, 6)
+    sheet.paste(cell, (col * 64, row * 64))
+sheet.save(VISUAL_DIR / "contact_sheet.png")
+
+print(f"Visual output saved to {VISUAL_DIR}/")
+print(f"  contact_sheet.png  — all 36 generated pieces")
+print(f"  top1..top9         — best pieces by composite score")
 
 # ---------------------------------------------------------------------------
 # Summary
