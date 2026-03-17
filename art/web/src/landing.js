@@ -7,7 +7,7 @@ import { saveSettings } from './persist.js';
 const TEXTS = {
   en: {
     subtitle: 'Neural pixel art · Cellular automata · Generative sound',
-    desc: 'A living system where a small neural network learns to generate 16×16 pixel art tiles. Selected pieces become seeds for three modes — Game of Life, Quad Fusion, and Reaction-Diffusion — that evolve on screen while an audio engine synthesizes sound from cell activity in real time. Switch between modes to discover different visual and sonic worlds.',
+    desc: 'A living system where a small neural network learns to generate 16×16 pixel art tiles. Selected pieces become seeds for four modes — Game of Life, Quad Fusion, Reaction-Diffusion, and Morphogenesis — that evolve on screen while an audio engine synthesizes sound from cell activity in real time. Switch between modes to discover different visual and sonic worlds.',
     'shortcuts-title': 'Keyboard Shortcuts',
     'k-mural': 'Mural view',
     'k-neural': 'Neural view',
@@ -22,7 +22,7 @@ const TEXTS = {
   },
   pt: {
     subtitle: 'Pixel art neural · Autômatos celulares · Som generativo',
-    desc: 'Um sistema vivo onde uma pequena rede neural aprende a gerar tiles de pixel art 16×16. As peças selecionadas viram sementes para três modos — Game of Life, Quad Fusion e Reação-Difusão — que evoluem na tela enquanto um motor de áudio sintetiza som a partir da atividade das células em tempo real. Alterne entre os modos para descobrir diferentes mundos visuais e sonoros.',
+    desc: 'Um sistema vivo onde uma pequena rede neural aprende a gerar tiles de pixel art 16×16. As peças selecionadas viram sementes para quatro modos — Game of Life, Quad Fusion, Reação-Difusão e Morfogênese — que evoluem na tela enquanto um motor de áudio sintetiza som a partir da atividade das células em tempo real. Alterne entre os modos para descobrir diferentes mundos visuais e sonoros.',
     'shortcuts-title': 'Atalhos de Teclado',
     'k-mural': 'Visualização mural',
     'k-neural': 'Visualização neural',

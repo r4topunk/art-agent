@@ -6,6 +6,8 @@ import { saveSettings } from '../persist.js';
 import {
   startGol, stopGol, restartGolTick,
 } from './timers.js';
+import { morphoResize, morphoApplyPreset, MORPHO_PRESETS } from './morphogenesis.js';
+import { RD_PRESETS } from './reactiondiffusion.js';
 
 // ── Helpers ──
 
@@ -29,6 +31,11 @@ export function muralZoom(delta) {
   const slider = document.getElementById('range-tile');
   if (slider) slider.value = idx;
   saveSettings({ muralTileSize: state.muralTileSize });
+  // Morphogenesis: resample simulation to new grid size
+  if (state.gol.variant === 'morphogenesis' && state.gol.morpho) {
+    morphoResize();
+    clearTileCache();
+  }
   renderMural();
 }
 
@@ -89,15 +96,18 @@ export function toggleFullscreen() {
 
 // ── Variant switch ──
 
-const VARIANTS = ['conway', 'quadlife', 'reaction-diffusion'];
+const VARIANTS = ['conway', 'quadlife', 'reaction-diffusion', 'morphogenesis'];
 
 export function switchVariant(variant) {
   if (!VARIANTS.includes(variant)) return;
   if (state.gol.variant === variant) return;
 
   state.gol.variant = variant;
-  saveSettings({ golVariant: variant });
+  // Reset pinned preset when switching variants
+  state.gol.pinnedPreset = -1;
+  saveSettings({ golVariant: variant, pinnedPreset: -1 });
   syncModeBar();
+  syncPresetBar();
 
   // Restart GoL with new variant
   startCrossfade(300);
@@ -109,6 +119,62 @@ export function syncModeBar() {
   document.querySelectorAll('#mode-bar .mode-btn').forEach(btn => {
     btn.classList.toggle('active', btn.dataset.variant === state.gol.variant);
   });
+}
+
+// ── Preset bar (sub-modes for RD / Morphogenesis) ──
+
+function getPresetsForVariant() {
+  const v = state.gol.variant;
+  if (v === 'reaction-diffusion') return RD_PRESETS;
+  if (v === 'morphogenesis') return MORPHO_PRESETS;
+  return null;
+}
+
+export function syncPresetBar() {
+  const bar = document.getElementById('preset-bar');
+  if (!bar) return;
+
+  const presets = getPresetsForVariant();
+  if (!presets) {
+    bar.classList.add('hidden');
+    bar.innerHTML = '';
+    return;
+  }
+
+  bar.classList.remove('hidden');
+  bar.innerHTML = '';
+
+  // "Auto" button
+  const autoBtn = document.createElement('button');
+  autoBtn.className = 'preset-btn' + (state.gol.pinnedPreset < 0 ? ' active' : '');
+  autoBtn.textContent = 'Auto';
+  autoBtn.addEventListener('click', () => pinPreset(-1));
+  bar.appendChild(autoBtn);
+
+  // Preset buttons
+  presets.forEach((p, i) => {
+    const btn = document.createElement('button');
+    btn.className = 'preset-btn' + (state.gol.pinnedPreset === i ? ' active' : '');
+    btn.textContent = p.label;
+    btn.addEventListener('click', () => pinPreset(i));
+    bar.appendChild(btn);
+  });
+}
+
+export function pinPreset(idx) {
+  state.gol.pinnedPreset = idx;
+  saveSettings({ pinnedPreset: idx });
+  syncPresetBar();
+
+  if (state.gol.variant === 'reaction-diffusion') {
+    // RD: restart to apply the new preset immediately
+    startCrossfade(300);
+    stopGol();
+    startGol();
+  } else if (state.gol.variant === 'morphogenesis') {
+    // Morphogenesis: snap parameters immediately, inject noise
+    morphoApplyPreset(idx);
+  }
 }
 
 // Sync toolbar DOM to match current state (called on startup)
@@ -139,8 +205,9 @@ export function syncToolbarUI() {
   rotBtn.textContent = state.muralTileRotation ? 'ON' : 'OFF';
   rotBtn.classList.toggle('active', state.muralTileRotation);
 
-  // Mode bar
+  // Mode bar + preset bar
   syncModeBar();
+  syncPresetBar();
 
   // Past generations
   const pastGensSlider = document.getElementById('range-past-gens');

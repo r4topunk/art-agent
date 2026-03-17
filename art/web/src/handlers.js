@@ -8,6 +8,7 @@ import { drawConfidence } from './draw/confidence.js';
 import { updateSparkline } from './draw/sparkline.js';
 import { renderMural } from './mural/render.js';
 import { clearTileCache } from './mural/cache.js';
+import { morphoMutateTiles } from './mural/morphogenesis.js';
 
 let layerCanvases = [];
 let galleryCanvases = [];
@@ -81,6 +82,10 @@ export function handle(event, data) {
     state.allPieces = data.pieces;
     clearTileCache();
     for (let i = 0; i < Math.min(data.pieces.length, 36); i++) drawGrid(galleryCanvases[i], data.pieces[i]);
+    // Morphogenesis: mutate tiles into the living form
+    if (state.gol.variant === 'morphogenesis' && state.gol.morpho) {
+      morphoMutateTiles();
+    }
     if (isMuralActive()) renderMural();
     break;
   }

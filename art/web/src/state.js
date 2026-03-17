@@ -34,7 +34,9 @@ export const state = {
     tickMS: 250,
     scanCol: 0,
     variant: _s.golVariant ?? 'conway',
+    pinnedPreset: _s.pinnedPreset ?? -1,  // -1 = auto, ≥0 = fixed preset index
     rd: null,  // { u: Float32Array, v: Float32Array, preset: number }
+    morpho: null,  // { u, v, f, k, targetF, targetK, tickCount }
   },
   // Audio
   audio: {

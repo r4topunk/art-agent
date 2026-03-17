@@ -2,16 +2,18 @@ import { getCachedTile } from './cache.js';
 import { state } from '../state.js';
 import { rebuildPitchTable } from './sonify.js';
 import { rdInit, rdStep } from './reactiondiffusion.js';
+import { morphoInit, morphoStep } from './morphogenesis.js';
 
 // Cellular automata at tile resolution on a toroidal grid.
 // Supports multiple rule variants via state.gol.variant.
 
-export const GOL_VARIANTS = ['conway', 'immigration', 'quadlife', 'reaction-diffusion'];
+export const GOL_VARIANTS = ['conway', 'immigration', 'quadlife', 'reaction-diffusion', 'morphogenesis'];
 export const GOL_VARIANT_LABELS = {
   conway: "Conway's GoL",
   immigration: 'Immigration',
   quadlife: 'QuadLife',
   'reaction-diffusion': 'Reaction-Diffusion',
+  morphogenesis: 'Morphogenesis',
 };
 
 // Number of tile slots each variant needs (including dead tile)
@@ -20,6 +22,7 @@ const VARIANT_TILE_COUNT = {
   immigration: 3,    // 2 species + dead
   quadlife: 5,       // 4 species + dead
   'reaction-diffusion': 5,  // dead + 4 concentration levels
+  morphogenesis: 5,  // dead + 4 concentration levels
 };
 
 // Color histogram for a 16x16 tile (8-palette normalized)
@@ -167,8 +170,9 @@ export function getPooledPieces() {
 export function golInit() {
   const variant = state.gol.variant || 'conway';
 
-  // Reaction-diffusion has its own init (continuous simulation)
+  // Reaction-diffusion and morphogenesis have their own init
   if (variant === 'reaction-diffusion') return rdInit();
+  if (variant === 'morphogenesis') return morphoInit();
 
   const pieces = getPooledPieces();
   if (pieces.length < 2) return;
@@ -264,8 +268,9 @@ export function golStep() {
   if (!grid) return;
   const variant = state.gol.variant || 'conway';
 
-  // Reaction-diffusion has its own continuous simulation
+  // Reaction-diffusion and morphogenesis have their own continuous simulation
   if (variant === 'reaction-diffusion') return rdStep();
+  if (variant === 'morphogenesis') return morphoStep();
 
   const next = new Uint8Array(rows * cols);
 

@@ -1,5 +1,6 @@
 import { renderMural, startCrossfade } from './render.js';
 import { golInit, golStep } from './gameoflife.js';
+import { morphoMutateTiles } from './morphogenesis.js';
 import { clearTileCache } from './cache.js';
 import { state } from '../state.js';
 import { updateFromGrid, stopSound, buildWavetables } from './sonify.js';
@@ -8,15 +9,30 @@ function isMuralActive() {
   return document.getElementById('page-mural').classList.contains('active');
 }
 
+function isMorphogenesis() {
+  return state.gol.variant === 'morphogenesis';
+}
+
 // ── Game of Life ──
 
 function golRound() {
   if (!isMuralActive()) return;
   if (state.muralPaused) {
-    // Retry later instead of resetting while paused
     state.gol.resetTimer = setTimeout(golRound, 500);
     return;
   }
+
+  // Morphogenesis: never reset the simulation — just mutate tiles
+  if (isMorphogenesis() && state.gol.morpho) {
+    startCrossfade(800);
+    morphoMutateTiles();
+    buildWavetables(state.gol.tileA, state.gol.tileB, state.gol.tileIdxA, state.gol.tileIdxB);
+    renderMural();
+    // Schedule next tile mutation
+    state.gol.resetTimer = setTimeout(golRound, state.TRANSITION_MS);
+    return;
+  }
+
   startCrossfade(500);
   clearTileCache();
   golInit();
@@ -49,6 +65,20 @@ function stopGolTick() {
 
 export function startGol() {
   stopGol();
+
+  // Morphogenesis: init once, tick forever, mutate tiles on round timer
+  if (isMorphogenesis()) {
+    golInit();  // calls morphoInit()
+    state.gol.tickMS = state.KALEIDO_FLIP_MS;
+    buildWavetables(state.gol.tileA, state.gol.tileB, state.gol.tileIdxA, state.gol.tileIdxB);
+    renderMural();
+    state.gol.running = true;
+    golTick();
+    // Schedule tile mutations (no simulation reset)
+    state.gol.resetTimer = setTimeout(golRound, state.TRANSITION_MS);
+    return;
+  }
+
   golRound();
 }
 

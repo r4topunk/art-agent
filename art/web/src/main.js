@@ -15,6 +15,7 @@ import { initKeyboard } from './keyboard.js';
 import { connect } from './connection.js';
 import { initHandlers, handle } from './handlers.js';
 import { renderMural } from './mural/render.js';
+import { morphoResize } from './mural/morphogenesis.js';
 import * as controls from './mural/controls.js';
 import { loadSettings } from './persist.js';
 import { state } from './state.js';
@@ -38,13 +39,19 @@ document.querySelectorAll('.tab[data-tab]').forEach(tab => {
 
 // Wire resize
 window.addEventListener('resize', () => {
-  if (document.getElementById('page-mural').classList.contains('active')) renderMural();
+  if (document.getElementById('page-mural').classList.contains('active')) {
+    if (state.gol.variant === 'morphogenesis' && state.gol.morpho) morphoResize();
+    renderMural();
+  }
 });
 
 // Fullscreen: sync body class + re-render mural to fill new dimensions
 document.addEventListener('fullscreenchange', () => {
   document.body.classList.toggle('fullscreen', !!document.fullscreenElement);
-  if (document.getElementById('page-mural').classList.contains('active')) renderMural();
+  if (document.getElementById('page-mural').classList.contains('active')) {
+    if (state.gol.variant === 'morphogenesis' && state.gol.morpho) morphoResize();
+    renderMural();
+  }
 });
 
 // Double-click canvas to toggle fullscreen

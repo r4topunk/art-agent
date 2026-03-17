@@ -4,6 +4,8 @@ import { state } from '../state.js';
 import { saveSettings } from '../persist.js';
 import { ZOOM_STEPS } from '../constants.js';
 import { renderMural } from '../mural/render.js';
+import { morphoResize } from '../mural/morphogenesis.js';
+import { clearTileCache } from '../mural/cache.js';
 
 function updateVolDisplay() {
   const pct = state.volumePercent ?? 60;
@@ -57,6 +59,10 @@ export function wireMuralToolbar(controls) {
     state.muralTileSize = ZOOM_STEPS[idx];
     $('zoom-val').textContent = state.muralTileSize + 'px';
     saveSettings({ muralTileSize: state.muralTileSize });
+    if (state.gol.variant === 'morphogenesis' && state.gol.morpho) {
+      morphoResize();
+      clearTileCache();
+    }
     renderMural();
   });
 

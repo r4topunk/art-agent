@@ -108,6 +108,48 @@
   text-shadow:0 0 10px rgba(57,255,20,0.4);
 }
 
+/* ── Preset bar — sub-modes for RD / Morphogenesis ── */
+
+#preset-bar {
+  position:absolute; bottom:72px; left:50%; transform:translateX(-50%);
+  z-index:10;
+  display:flex; align-items:stretch;
+  background:rgba(6,6,14,0.78); backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px);
+  border:1px solid var(--border); border-radius:5px;
+  overflow:hidden;
+  pointer-events:auto;
+  transition:opacity .25s ease;
+}
+
+#preset-bar.hidden { display:none; }
+
+.preset-btn {
+  background:transparent; border:none;
+  color:var(--text-dim);
+  font-family:'JetBrains Mono',monospace;
+  font-size:9px; font-weight:400;
+  letter-spacing:0.05em;
+  padding:7px 14px;
+  cursor:pointer;
+  transition:color .25s, background .25s, text-shadow .25s;
+  white-space:nowrap;
+}
+
+.preset-btn + .preset-btn {
+  border-left:1px solid var(--border);
+}
+
+.preset-btn:hover {
+  color:var(--text-hi);
+  background:rgba(57,255,20,0.04);
+}
+
+.preset-btn.active {
+  color:var(--neon);
+  background:rgba(57,255,20,0.08);
+  text-shadow:0 0 10px rgba(57,255,20,0.4);
+}
+
 /* ── Collapsible settings panel ─────────────────── */
 
 #mural-settings {
@@ -234,6 +276,7 @@ body.fullscreen #mural-toolbar  { display:none; }
 body.fullscreen #mural-settings { display:none; }
 body.fullscreen #mural-status   { display:none; }
 body.fullscreen #mode-bar       { display:none; }
+body.fullscreen #preset-bar     { display:none; }
 body.fullscreen #pages          { inset:0; }
 
 /* ── Canvas area ────────────────────────────────── */
@@ -317,6 +360,10 @@ body.fullscreen #pages          { inset:0; }
   /* Mode bar */
   #mode-bar { bottom:16px; }
   .mode-btn { font-size:10px; padding:10px 14px; }
+
+  /* Preset bar */
+  #preset-bar { bottom:60px; }
+  .preset-btn { font-size:8px; padding:8px 10px; }
 
   /* Settings panel: full-width stacked */
   #mural-settings {

@@ -30,9 +30,9 @@
 
     <p class="landing-desc" data-i18n="desc">
       A living system where a small neural network learns to generate 16×16 pixel art tiles.
-      Selected pieces become seeds for three cellular automata modes — Game of Life,
-      Quad Fusion, and Reaction-Diffusion — that evolve on screen while an audio engine
-      synthesizes sound from cell activity in real time.
+      Selected pieces become seeds for four modes — Game of Life,
+      Quad Fusion, Reaction-Diffusion, and Morphogenesis — that evolve on screen while
+      an audio engine synthesizes sound from cell activity in real time.
     </p>
 
     <div class="landing-shortcuts-title" data-i18n="shortcuts-title">Keyboard Shortcuts</div>
@@ -152,7 +152,11 @@
       <button class="mode-btn active" data-variant="conway">Game of Life</button>
       <button class="mode-btn" data-variant="quadlife">Quad Fusion</button>
       <button class="mode-btn" data-variant="reaction-diffusion">Reaction-Diffusion</button>
+      <button class="mode-btn" data-variant="morphogenesis">Morphogenesis</button>
     </div>
+
+    <!-- Preset bar — appears for RD / Morphogenesis -->
+    <div id="preset-bar" class="hidden"></div>
 
     <!-- Collapsible settings panel -->
     <div id="mural-settings" class="collapsed">

@@ -129,8 +129,11 @@ export function rdInit() {
   const u = new Float32Array(total).fill(1.0);
   const v = new Float32Array(total).fill(0.0);
 
-  // Random preset each round
-  const presetIdx = Math.floor(Math.random() * RD_PRESETS.length);
+  // Pinned or random preset
+  const pinned = state.gol.pinnedPreset;
+  const presetIdx = (pinned >= 0 && pinned < RD_PRESETS.length)
+    ? pinned
+    : Math.floor(Math.random() * RD_PRESETS.length);
   const bilateral = true; // RD is always bilateral (Rorschach)
 
   // Seed V: circular patches in top-left quadrant, mirrored to all 4
