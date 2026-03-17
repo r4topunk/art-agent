@@ -207,11 +207,11 @@ ENTROPY_REG = 0.05     # entropy regularization coefficient
 
 # GAS loop
 IMAGES_PER_GEN = 64
-SELECT_TOP = 12
-FINETUNE_STEPS = 50
-FINETUNE_LR = 1e-4
+SELECT_TOP = 8
+FINETUNE_STEPS = 80
+FINETUNE_LR = 5e-5
 BOOTSTRAP_MIX_RATIO = 0.3
-GEN_TEMPERATURE_START = 1.1
+GEN_TEMPERATURE_START = 1.05
 GEN_TEMPERATURE_END = 0.85
 TEMP_DECAY_GENS = 30
 
@@ -286,8 +286,8 @@ dataloader = make_dataloader(bootstrap_patterns, BATCH_SIZE)
 use_amp = device.type == "mps"
 
 # Estimate steps from time budget (70% for bootstrap, 30% for GAS)
-BOOTSTRAP_TIME = int(TIME_BUDGET * 0.20)
-GAS_TIME = int(TIME_BUDGET * 0.80)
+BOOTSTRAP_TIME = int(TIME_BUDGET * 0.25)
+GAS_TIME = int(TIME_BUDGET * 0.75)
 
 model.train()
 step = 0
@@ -415,7 +415,10 @@ while gas_time_elapsed < GAS_TIME:
 
         with torch.autocast(device.type, enabled=use_amp):
             ft_logits = model(ft_inputs)
-            ft_loss = loss_fn(ft_logits.reshape(-1, ft_logits.size(-1)), ft_targets.reshape(-1))
+            ft_ce = loss_fn(ft_logits.reshape(-1, ft_logits.size(-1)), ft_targets.reshape(-1))
+            ft_probs = F.softmax(ft_logits.float(), dim=-1)
+            ft_entropy = -torch.sum(ft_probs * torch.log(ft_probs + 1e-8), dim=-1).mean()
+            ft_loss = ft_ce - ENTROPY_REG * ft_entropy
 
         ft_optimizer.zero_grad()
         ft_loss.backward()
