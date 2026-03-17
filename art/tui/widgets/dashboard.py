@@ -185,14 +185,20 @@ class TrainingPanel(Widget):
                 step = len(values) / spark_w
                 values = [values[int(i * step)] for i in range(spark_w)]
 
-            min_v = min(values)
-            max_v = max(values)
-            range_v = max_v - min_v if max_v > min_v else 1.0
+            import math
+            finite = [v for v in values if math.isfinite(v)]
+            if finite:
+                min_v = min(finite)
+                max_v = max(finite)
+                range_v = max_v - min_v if max_v > min_v else 1.0
 
-            for v in values:
-                idx = int((1 - (v - min_v) / range_v) * 7)
-                idx = max(0, min(7, idx))
-                result.append(SPARK_CHARS[idx], style="green")
+                for v in values:
+                    if not math.isfinite(v):
+                        result.append("╳", style="red")
+                    else:
+                        idx = int((1 - (v - min_v) / range_v) * 7)
+                        idx = max(0, min(7, idx))
+                        result.append(SPARK_CHARS[idx], style="green")
             result.append("\n")
 
         return result

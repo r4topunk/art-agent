@@ -51,12 +51,17 @@ class HeartbeatWidget(Widget):
             step = len(values) / spark_w
             values = [values[int(i * step)] for i in range(spark_w)]
 
-        min_v = min(values)
-        max_v = max(values)
+        clean = [v for v in values if v == v]  # filter NaN
+        if not clean:
+            return result
+        min_v = min(clean)
+        max_v = max(clean)
         range_v = max_v - min_v if max_v > min_v else 1.0
 
         result.append("  ")
         for v in values:
+            if v != v:  # NaN check
+                continue
             normalized = (v - min_v) / range_v
             idx = min(7, max(0, int(normalized * 7.99)))
             if normalized < 0.3:
