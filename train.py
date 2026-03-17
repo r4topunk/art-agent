@@ -205,14 +205,14 @@ WARMUP_STEPS = 20
 ENTROPY_REG = 0.02     # entropy regularization coefficient
 
 # GAS loop
-IMAGES_PER_GEN = 36
-SELECT_TOP = 5
-FINETUNE_STEPS = 30
+IMAGES_PER_GEN = 48
+SELECT_TOP = 10
+FINETUNE_STEPS = 40
 FINETUNE_LR = 1e-4
-BOOTSTRAP_MIX_RATIO = 0.5
-GEN_TEMPERATURE_START = 1.0
-GEN_TEMPERATURE_END = 0.8
-TEMP_DECAY_GENS = 50
+BOOTSTRAP_MIX_RATIO = 0.3
+GEN_TEMPERATURE_START = 1.1
+GEN_TEMPERATURE_END = 0.85
+TEMP_DECAY_GENS = 30
 
 # Eval
 EVAL_TEMPERATURE = 0.9
@@ -285,8 +285,8 @@ dataloader = make_dataloader(bootstrap_patterns, BATCH_SIZE)
 use_amp = device.type == "mps"
 
 # Estimate steps from time budget (70% for bootstrap, 30% for GAS)
-BOOTSTRAP_TIME = int(TIME_BUDGET * 0.4)
-GAS_TIME = int(TIME_BUDGET * 0.6)
+BOOTSTRAP_TIME = int(TIME_BUDGET * 0.3)
+GAS_TIME = int(TIME_BUDGET * 0.7)
 
 model.train()
 step = 0
@@ -385,8 +385,16 @@ while gas_time_elapsed < GAS_TIME:
     selected_indices = ranked[:SELECT_TOP]
     selected = [grids[i] for i in selected_indices]
 
-    # Finetune on selected + bootstrap mix
-    training_patterns = list(selected)
+    # Augment selected with flips/rotations
+    augmented = []
+    for g in selected:
+        augmented.append(g)
+        augmented.append(np.fliplr(g))
+        augmented.append(np.flipud(g))
+        augmented.append(np.rot90(g, 2))
+
+    # Finetune on augmented + bootstrap mix
+    training_patterns = list(augmented)
     n_bootstrap = max(1, int(len(selected) * BOOTSTRAP_MIX_RATIO))
     sampled_bootstrap = random.sample(bootstrap_patterns, min(n_bootstrap, len(bootstrap_patterns)))
     training_patterns.extend(sampled_bootstrap)
