@@ -328,8 +328,34 @@ export function stopSound() {
 
 // ── Persistent oscillator bank (2-voice unison per row) ──
 
+function fadeOutOscBank(durationSec = 0.4) {
+  const a = state.audio;
+  if (!a.oscBank.length || !a.ctx) return;
+  const now = a.ctx.currentTime;
+  const old = a.oscBank;
+  a.oscBank = []; // detach immediately so new bank can be created
+  // Fade out all voices
+  for (const voice of old) {
+    voice.gain.gain.cancelScheduledValues(now);
+    voice.gain.gain.setTargetAtTime(0, now, durationSec * 0.25);
+  }
+  // Clean up after fade completes
+  setTimeout(() => {
+    for (const voice of old) {
+      try { voice.oscA.stop(); } catch (_) {}
+      try { voice.oscB.stop(); } catch (_) {}
+      voice.oscA.disconnect();
+      voice.oscB.disconnect();
+      voice.panA.disconnect();
+      voice.panB.disconnect();
+      voice.gain.disconnect();
+      voice.panner.disconnect();
+    }
+  }, durationSec * 1000 + 100);
+}
+
 export function initOscBank(rows) {
-  destroyOscBank();
+  fadeOutOscBank();
   const a = state.audio;
   if (!a.ctx || !a.synthBus) return;
 
@@ -721,10 +747,20 @@ export function buildWavetables(tileA, tileB, tileIdxA = 0, tileIdxB = 0) {
   a.waveAlive = tileToPeriodicWave(a.ctx, tileA, tiltExp);
   a.waveDrone = tileToPeriodicWave(a.ctx, tileB, tiltExp);
 
-  if (a.waveDrone) {
-    a.droneOsc.forEach(({ osc }) => osc.setPeriodicWave(a.waveDrone));
-  } else {
-    a.droneOsc.forEach(({ osc }) => { osc.type = 'sine'; });
+  // Crossfade drone wavetable: dip gain, swap wave, restore
+  if (a.droneOsc) {
+    const now = a.ctx.currentTime;
+    a.droneOsc.forEach(({ osc, gain }) => {
+      const prevAmp = gain.gain.value;
+      gain.gain.cancelScheduledValues(now);
+      gain.gain.setTargetAtTime(0, now, 0.08);
+      setTimeout(() => {
+        if (a.waveDrone) osc.setPeriodicWave(a.waveDrone);
+        else osc.type = 'sine';
+        gain.gain.cancelScheduledValues(a.ctx.currentTime);
+        gain.gain.setTargetAtTime(prevAmp, a.ctx.currentTime, 0.15);
+      }, 150);
+    });
   }
 
   const rows = state.gol && state.gol.rows ? state.gol.rows : 0;

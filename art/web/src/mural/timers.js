@@ -1,4 +1,4 @@
-import { renderMural } from './render.js';
+import { renderMural, startCrossfade } from './render.js';
 import { golInit, golStep } from './gameoflife.js';
 import { clearTileCache } from './cache.js';
 import { state } from '../state.js';
@@ -70,6 +70,7 @@ function golRound() {
     state.gol.resetTimer = setTimeout(golRound, 500);
     return;
   }
+  startCrossfade(500);
   clearTileCache();
   golInit();
   state.gol.tickMS = state.KALEIDO_FLIP_MS;
