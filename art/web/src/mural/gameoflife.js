@@ -1,15 +1,17 @@
 import { getCachedTile } from './cache.js';
 import { state } from '../state.js';
 import { rebuildPitchTable } from './sonify.js';
+import { rdInit, rdStep } from './reactiondiffusion.js';
 
 // Cellular automata at tile resolution on a toroidal grid.
 // Supports multiple rule variants via state.gol.variant.
 
-export const GOL_VARIANTS = ['conway', 'immigration', 'quadlife'];
+export const GOL_VARIANTS = ['conway', 'immigration', 'quadlife', 'reaction-diffusion'];
 export const GOL_VARIANT_LABELS = {
   conway: "Conway's GoL",
   immigration: 'Immigration',
   quadlife: 'QuadLife',
+  'reaction-diffusion': 'Reaction-Diffusion',
 };
 
 // Number of tile slots each variant needs (including dead tile)
@@ -17,47 +19,80 @@ const VARIANT_TILE_COUNT = {
   conway: 2,        // alive + dead
   immigration: 3,    // 2 species + dead
   quadlife: 5,       // 4 species + dead
+  'reaction-diffusion': 5,  // dead + 4 concentration levels
 };
 
-function pickDistinctTiles(pieces, count) {
-  if (pieces.length < count) count = pieces.length;
-  function fp(piece) {
-    let s = 0;
-    for (let r = 0; r < piece.length; r++)
-      for (let c = 0; c < piece[r].length; c++) s += piece[r][c];
-    return s;
+// Color histogram for a 16x16 tile (8-palette normalized)
+function tileHistogram(piece) {
+  const hist = new Float32Array(8);
+  let total = 0;
+  for (let r = 0; r < piece.length; r++)
+    for (let c = 0; c < piece[r].length; c++) {
+      hist[piece[r][c]]++;
+      total++;
+    }
+  if (total > 0) for (let i = 0; i < 8; i++) hist[i] /= total;
+  return hist;
+}
+
+// L2 distance between two histograms
+function histDist(a, b) {
+  let d = 0;
+  for (let i = 0; i < a.length; i++) d += (a[i] - b[i]) ** 2;
+  return d; // skip sqrt — comparing relative magnitudes is enough
+}
+
+// Farthest-point sampling: greedily picks the most visually distinct tiles
+export function pickDistinctTiles(pieces, count) {
+  if (pieces.length <= count) {
+    return {
+      tiles: pieces.slice(0, count),
+      indices: Array.from({ length: Math.min(pieces.length, count) }, (_, i) => i),
+    };
   }
+
+  const hists = pieces.map(tileHistogram);
   const picked = [];
   const pickedIdx = [];
-  const usedFps = new Set();
-  // Shuffle indices
-  const indices = Array.from({ length: pieces.length }, (_, i) => i);
-  for (let i = indices.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [indices[i], indices[j]] = [indices[j], indices[i]];
-  }
-  // First pass: pick tiles with distinct fingerprints
-  for (const i of indices) {
-    if (picked.length >= count) break;
-    const f = fp(pieces[i]);
-    if (!usedFps.has(f)) {
-      usedFps.add(f);
-      picked.push(pieces[i]);
-      pickedIdx.push(i);
+  const used = new Set();
+
+  // Start from a random tile
+  const first = Math.floor(Math.random() * pieces.length);
+  picked.push(pieces[first]);
+  pickedIdx.push(first);
+  used.add(first);
+
+  // Each round, pick the tile whose minimum distance to all already-picked tiles is largest
+  while (picked.length < count) {
+    let bestIdx = -1;
+    let bestDist = -1;
+    for (let i = 0; i < pieces.length; i++) {
+      if (used.has(i)) continue;
+      let minDist = Infinity;
+      for (const pi of pickedIdx) {
+        const d = histDist(hists[i], hists[pi]);
+        if (d < minDist) minDist = d;
+      }
+      if (minDist > bestDist) {
+        bestDist = minDist;
+        bestIdx = i;
+      }
     }
+    if (bestIdx === -1) break;
+    picked.push(pieces[bestIdx]);
+    pickedIdx.push(bestIdx);
+    used.add(bestIdx);
   }
-  // Fill remaining if not enough distinct ones
-  for (const i of indices) {
-    if (picked.length >= count) break;
-    if (!pickedIdx.includes(i)) {
-      picked.push(pieces[i]);
-      pickedIdx.push(i);
-    }
-  }
+
   return { tiles: picked, indices: pickedIdx };
 }
 
 export function golInit() {
+  const variant = state.gol.variant || 'conway';
+
+  // Reaction-diffusion has its own init (continuous simulation)
+  if (variant === 'reaction-diffusion') return rdInit();
+
   const pieces = state.allPieces.length ? state.allPieces : [];
   if (pieces.length < 2) return;
   const wrap = document.getElementById('mural-canvas-wrap');
@@ -66,38 +101,33 @@ export function golInit() {
   const cols = Math.ceil(W / ts) + 1;
   const rows = Math.ceil(H / ts) + 1;
 
-  const variant = state.gol.variant || 'conway';
   const needed = VARIANT_TILE_COUNT[variant] || 2;
   const { tiles, indices } = pickDistinctTiles(pieces, needed);
 
-  // Store tiles array: index 0 = dead, 1+ = alive states
   state.gol.tiles = tiles;
   state.gol.tileIndices = indices;
-  // Keep tileA/tileB for backward compat with sonify
   state.gol.tileA = tiles[1] || tiles[0];
   state.gol.tileB = tiles[0];
   state.gol.tileIdxA = indices[1] || indices[0];
   state.gol.tileIdxB = indices[0];
   state.gol.cols = cols;
   state.gol.rows = rows;
-  state.gol.maxState = needed - 1; // max cell value (0 = dead)
+  state.gol.maxState = needed - 1;
 
   // Build kaleidoscope-symmetric initial state
   const hC = Math.ceil(cols / 2);
   const hR = Math.ceil(rows / 2);
   const grid = new Uint8Array(rows * cols);
-  const aliveStates = needed - 1; // number of alive states
+  const aliveStates = needed - 1;
 
   for (let r = 0; r < hR; r++)
     for (let c = 0; c < hC; c++) {
       let val = 0;
       if (variant === 'quadlife') {
-        // 4 species, ~40% density
         val = Math.random() < 0.4 ? (1 + Math.floor(Math.random() * 4)) : 0;
       } else if (variant === 'immigration') {
         val = Math.random() < 0.4 ? (1 + Math.floor(Math.random() * 2)) : 0;
       } else {
-        // For conway: alive = maxState (highest value)
         val = Math.random() < 0.4 ? aliveStates : 0;
       }
       const mc = cols - 1 - c;
@@ -156,6 +186,10 @@ export function golStep() {
   const { grid, cols, rows, maxState } = state.gol;
   if (!grid) return;
   const variant = state.gol.variant || 'conway';
+
+  // Reaction-diffusion has its own continuous simulation
+  if (variant === 'reaction-diffusion') return rdStep();
+
   const next = new Uint8Array(rows * cols);
 
   for (let r = 0; r < rows; r++)
@@ -172,8 +206,6 @@ export function golStep() {
         }
 
         case 'immigration': {
-          // 2 species (1, 2) + dead (0). Standard GoL rules.
-          // Newborns take majority color of alive neighbors.
           const n = countNeighbors(grid, cols, rows, r, c);
           if (cell > 0) {
             next[idx] = (n === 2 || n === 3) ? cell : 0;
@@ -188,8 +220,6 @@ export function golStep() {
         }
 
         case 'quadlife': {
-          // 4 species (1-4) + dead (0). Standard GoL rules.
-          // Newborns take majority color of alive neighbors.
           const n = countNeighbors(grid, cols, rows, r, c);
           if (cell > 0) {
             next[idx] = (n === 2 || n === 3) ? cell : 0;

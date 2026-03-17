@@ -37,6 +37,7 @@ export const state = {
     tickMS: 250,
     scanCol: 0,
     variant: _s.golVariant ?? 'conway',
+    rd: null,  // { u: Float32Array, v: Float32Array, preset: number }
   },
   // Audio
   audio: {
