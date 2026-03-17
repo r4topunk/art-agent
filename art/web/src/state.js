@@ -27,12 +27,16 @@ export const state = {
     tileB: null,
     tileIdxA: 0,
     tileIdxB: 0,
+    tiles: [],
+    tileIndices: [],
+    maxState: 1,
     generation: 0,
     tickTimer: null,
     resetTimer: null,
     running: false,
     tickMS: 250,
     scanCol: 0,
+    variant: _s.golVariant ?? 'conway',
   },
   // Audio
   audio: {

@@ -93,6 +93,16 @@ export function wireMuralToolbar(controls) {
     controls.kaleidoFlipTime(0); // restart timers without changing value
   });
 
+  // ── GoL variant select ──
+  $('gol-variant-select').addEventListener('change', (e) => {
+    state.gol.variant = e.target.value;
+    saveSettings({ golVariant: e.target.value });
+    // Restart GoL if currently in that mode
+    if (state.muralMode === 'gameoflife' && state.gol.running) {
+      controls.restartGol();
+    }
+  });
+
   // ── Rotate toggle ──
   $('mural-rotate-btn').addEventListener('click', () => controls.toggleTileRotation());
 

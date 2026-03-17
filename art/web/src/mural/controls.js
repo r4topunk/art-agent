@@ -142,6 +142,12 @@ export function toggleMuralMode() {
   if (state.muralMode !== 'gameoflife') renderMural(); // GoL renders via its own init
 }
 
+// Restart GoL (used when variant changes)
+export function restartGol() {
+  stopGol();
+  startGol();
+}
+
 // Sync toolbar DOM to match current state (called on startup)
 export function syncToolbarUI() {
   // Tile size
@@ -174,6 +180,10 @@ export function syncToolbarUI() {
   const modeBtn = document.getElementById('mural-mode-btn');
   modeBtn.textContent = MODE_LABELS[state.muralMode];
   modeBtn.classList.toggle('kaleido', state.muralMode !== 'wallpaper');
+
+  // GoL variant
+  const variantSelect = document.getElementById('gol-variant-select');
+  if (variantSelect) variantSelect.value = state.gol.variant || 'conway';
 
   // CRT
   const crtBtn = document.getElementById('mural-crt-btn');

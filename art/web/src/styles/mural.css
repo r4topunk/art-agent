@@ -140,6 +140,24 @@
   color:var(--neon); border-color:var(--neon); box-shadow:var(--glow);
 }
 
+/* ── Select dropdowns ──────────────────────────── */
+
+.setting-select {
+  padding:4px 8px; border:1px solid var(--border); background:var(--neon3);
+  color:var(--text); font-size:9px; letter-spacing:1px;
+  font-family:'JetBrains Mono',monospace;
+  cursor:pointer; outline:none;
+  transition:border-color .2s, box-shadow .2s;
+  min-height:28px;
+}
+.setting-select:hover,
+.setting-select:focus {
+  border-color:var(--neon); box-shadow:var(--glow);
+}
+.setting-select option {
+  background:var(--bg); color:var(--text);
+}
+
 /* ── Range sliders ──────────────────────────────── */
 
 input[type="range"] {
